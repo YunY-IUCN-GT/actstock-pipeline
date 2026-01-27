@@ -8,7 +8,7 @@ Triggers Spark job to:
   1. Select top 1 best-performing stock from each trending ETF (from top 5 market cap holdings)
   2. Weight by: performance × inverse market cap
   3. Normalize weights to sum to 100%
-Writes to: analytics_portfolio_allocation
+Writes to: 05_analytics_portfolio_allocation
 """
 
 from datetime import datetime, timedelta
@@ -46,7 +46,7 @@ def check_data_ready(**context):
         # Check trending ETFs
         trending_query = """
             SELECT COUNT(*) as trending_count
-            FROM analytics_trending_etfs
+            FROM 03_analytics_trending_etfs
             WHERE as_of_date = CURRENT_DATE
               AND is_trending = TRUE
         """
@@ -56,8 +56,8 @@ def check_data_ready(**context):
         # Check holdings for trending ETFs
         holdings_query = """
             SELECT COUNT(DISTINCT eh.ticker) as holdings_count
-            FROM collected_etf_holdings eh
-            INNER JOIN analytics_trending_etfs te 
+            FROM 04_collected_etf_holdings eh
+            INNER JOIN 03_analytics_trending_etfs te 
                 ON eh.etf_ticker = te.etf_ticker
             WHERE te.as_of_date = CURRENT_DATE
               AND te.is_trending = TRUE
@@ -69,10 +69,10 @@ def check_data_ready(**context):
         # Check stock data for those holdings
         stock_query = """
             SELECT COUNT(DISTINCT sh.ticker) as stock_count
-            FROM collected_daily_stock_history sh
-            INNER JOIN collected_etf_holdings eh 
+            FROM 06_collected_daily_stock_history sh
+            INNER JOIN 04_collected_etf_holdings eh 
                 ON sh.ticker = eh.ticker
-            INNER JOIN analytics_trending_etfs te 
+            INNER JOIN 03_analytics_trending_etfs te 
                 ON eh.etf_ticker = te.etf_ticker
             WHERE te.as_of_date = CURRENT_DATE
               AND te.is_trending = TRUE
@@ -149,7 +149,7 @@ def verify_portfolio_results(**context):
                 COUNT(*) as stock_count,
                 SUM(portfolio_weight) as total_weight,
                 MAX(as_of_date) as latest_date
-            FROM analytics_portfolio_allocation
+            FROM 05_analytics_portfolio_allocation
             WHERE as_of_date = CURRENT_DATE
         """
         portfolio_result = db.fetch_one(portfolio_query)

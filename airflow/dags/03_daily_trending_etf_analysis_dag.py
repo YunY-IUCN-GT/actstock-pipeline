@@ -44,7 +44,7 @@ def check_etf_data_ready(**context):
         query = """
             SELECT COUNT(DISTINCT ticker) as etf_count,
                    MAX(trade_date) as latest_date
-            FROM collected_daily_etf_ohlc
+            FROM 01_collected_daily_etf_ohlc
             WHERE trade_date >= CURRENT_DATE - INTERVAL '2 days'
         """
         result = db.fetch_one(query)
@@ -63,7 +63,7 @@ def check_etf_data_ready(**context):
         # Check if we have SPY data (critical for trending analysis)
         spy_query = """
             SELECT COUNT(*) as spy_count
-            FROM collected_daily_etf_ohlc
+            FROM 01_collected_daily_etf_ohlc
             WHERE ticker = 'SPY'
               AND trade_date >= CURRENT_DATE - INTERVAL '25 days'
         """
@@ -126,7 +126,7 @@ def verify_trending_results(**context):
                 COUNT(*) as total_etfs,
                 SUM(CASE WHEN is_trending THEN 1 ELSE 0 END) as trending_count,
                 MAX(as_of_date) as latest_date
-            FROM analytics_trending_etfs
+            FROM 03_analytics_trending_etfs
             WHERE as_of_date = CURRENT_DATE
         """
         result = db.fetch_one(query)
@@ -150,7 +150,7 @@ def verify_trending_results(**context):
             # Get list of trending ETFs
             trending_query = """
                 SELECT ticker, etf_type, sector_name, return_pct, spy_return
-                FROM analytics_trending_etfs
+                FROM 03_analytics_trending_etfs
                 WHERE as_of_date = CURRENT_DATE
                   AND is_trending = TRUE
                 ORDER BY return_pct DESC

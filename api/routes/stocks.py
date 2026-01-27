@@ -27,7 +27,7 @@ async def get_latest_stock(symbol: str):
             ticker as symbol, sector, close_price as avg_price, volume as total_volume,
             low_price as min_price, high_price as max_price, 1 as record_count,
             trade_date as window_start, trade_date as window_end, created_at as processed_at
-        FROM collected_daily_stock_history
+        FROM 06_collected_daily_stock_history
         WHERE ticker = %s
         ORDER BY trade_date DESC
         LIMIT 1
@@ -56,7 +56,7 @@ async def get_history(
             ticker as symbol, sector, close_price as avg_price, volume as total_volume,
             low_price as min_price, high_price as max_price, 1 as record_count,
             trade_date as window_start, trade_date as window_end
-        FROM collected_daily_stock_history
+        FROM 06_collected_daily_stock_history
         WHERE ticker = %s
     """
     params = [symbol.upper()]
@@ -105,7 +105,7 @@ async def get_portfolio_allocation(
         date_filter = "as_of_date = %s"
         date_param = as_of_date
     else:
-        date_filter = "as_of_date = (SELECT MAX(as_of_date) FROM analytics_portfolio_allocation WHERE period_days = %s)"
+        date_filter = "as_of_date = (SELECT MAX(as_of_date) FROM 05_analytics_portfolio_allocation WHERE period_days = %s)"
         date_param = period_days
     
     query = f"""
@@ -121,7 +121,7 @@ async def get_portfolio_allocation(
             rank_20d as rank,
             period_days,
             created_at
-        FROM analytics_portfolio_allocation
+        FROM 05_analytics_portfolio_allocation
         WHERE {date_filter}
           AND period_days = %s
         ORDER BY portfolio_weight DESC
@@ -168,7 +168,7 @@ async def get_monthly_portfolio(
         date_filter = "rebalance_date = %s"
         params = [rebalance_date]
     else:
-        date_filter = "rebalance_date = (SELECT MAX(rebalance_date) FROM analytics_monthly_portfolio)"
+        date_filter = "rebalance_date = (SELECT MAX(rebalance_date) FROM 08_analytics_monthly_portfolio)"
         params = []
     
     query = f"""
@@ -186,7 +186,7 @@ async def get_monthly_portfolio(
             market_cap,
             allocation_reason,
             created_at
-        FROM analytics_monthly_portfolio
+        FROM 08_analytics_monthly_portfolio
         WHERE {date_filter}
         ORDER BY final_rank ASC
     """

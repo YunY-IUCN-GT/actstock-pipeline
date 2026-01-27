@@ -4,7 +4,7 @@
 """
 Spark Batch Job - Calculate Top 5 ETF Holdings by Performance
 Analyzes ETF holdings performance over 5, 10, and 20-day windows
-Stores results in analytics_etf_top_holdings table
+Stores results in 09_analytics_etf_top_holdings table
 """
 
 import os
@@ -63,9 +63,9 @@ class ETFTopHoldingsAnalyzer:
             etf_type_filter: Optional filter for 'benchmark' or 'sector'
         """
         if etf_type_filter:
-            query = f"(SELECT ticker, etf_type, sector_name FROM collected_meta_etf WHERE etf_type = '{etf_type_filter}') as etf_meta"
+            query = f"(SELECT ticker, etf_type, sector_name FROM 00_collected_meta_etf WHERE etf_type = '{etf_type_filter}') as etf_meta"
         else:
-            query = "(SELECT ticker, etf_type, sector_name FROM collected_meta_etf) as etf_meta"
+            query = "(SELECT ticker, etf_type, sector_name FROM 00_collected_meta_etf) as etf_meta"
         
         df = self.spark.read.jdbc(
             url=self.jdbc_url,
@@ -97,7 +97,7 @@ class ETFTopHoldingsAnalyzer:
                 volume,
                 price_change_percent,
                 market_cap
-            FROM collected_daily_stock_history
+            FROM 06_collected_daily_stock_history
             WHERE trade_date >= '{cutoff_date}'
         ) as stock_history"""
         
@@ -112,7 +112,7 @@ class ETFTopHoldingsAnalyzer:
     
     def load_etf_holdings(self) -> DataFrame:
         """
-        Load ETF holdings from collected_etf_holdings
+        Load ETF holdings from 04_collected_etf_holdings
         Uses the most recent holdings data available
         """
         query = """(
@@ -122,7 +122,7 @@ class ETFTopHoldingsAnalyzer:
                 holding_name,
                 holding_percent,
                 as_of_date
-            FROM collected_etf_holdings
+            FROM 04_collected_etf_holdings
             ORDER BY etf_ticker, holding_ticker, as_of_date DESC
         ) as holdings"""
         
@@ -248,11 +248,11 @@ class ETFTopHoldingsAnalyzer:
         return result_df
     
     def save_results(self, results_df: DataFrame):
-        """Save results to analytics_etf_top_holdings table"""
+        """Save results to 09_analytics_etf_top_holdings table"""
         try:
             results_df.write.jdbc(
                 url=self.jdbc_url,
-                table="analytics_etf_top_holdings",
+                table="09_analytics_etf_top_holdings",
                 mode="append",
                 properties=self.jdbc_properties
             )
@@ -264,7 +264,7 @@ class ETFTopHoldingsAnalyzer:
     def cleanup_old_data(self, as_of_date: date):
         """Remove duplicate entries for the same date before inserting new ones"""
         delete_query = f"""
-            DELETE FROM analytics_etf_top_holdings
+            DELETE FROM 09_analytics_etf_top_holdings
             WHERE as_of_date = '{as_of_date.strftime('%Y-%m-%d')}'
         """
         try:

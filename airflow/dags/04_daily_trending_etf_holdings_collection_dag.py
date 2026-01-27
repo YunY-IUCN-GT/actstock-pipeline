@@ -44,7 +44,7 @@ def check_trending_results_ready(**context):
             SELECT 
                 COUNT(*) as total_etfs,
                 SUM(CASE WHEN is_trending THEN 1 ELSE 0 END) as trending_count
-            FROM analytics_trending_etfs
+            FROM 03_analytics_trending_etfs
             WHERE as_of_date = CURRENT_DATE
         """
         result = db.fetch_one(query)
@@ -109,7 +109,7 @@ def verify_holdings_collected(**context):
             SELECT 
                 COUNT(DISTINCT etf_ticker) as etf_count,
                 COUNT(DISTINCT ticker) as holding_count
-            FROM collected_etf_holdings
+            FROM 04_collected_etf_holdings
             WHERE as_of_date = CURRENT_DATE
         """
         holdings_result = db.fetch_one(holdings_query)
@@ -122,7 +122,7 @@ def verify_holdings_collected(**context):
             SELECT 
                 COUNT(DISTINCT ticker) as stock_count,
                 MAX(trade_date) as latest_date
-            FROM collected_daily_stock_history
+            FROM 06_collected_daily_stock_history
             WHERE trade_date >= CURRENT_DATE - INTERVAL '1 day'
         """
         stock_result = db.fetch_one(stock_query)
@@ -139,7 +139,7 @@ def verify_holdings_collected(**context):
         # Get trending count for comparison
         trending_query = """
             SELECT COUNT(*) as trending_count
-            FROM analytics_trending_etfs
+            FROM 03_analytics_trending_etfs
             WHERE as_of_date = CURRENT_DATE
               AND is_trending = TRUE
         """

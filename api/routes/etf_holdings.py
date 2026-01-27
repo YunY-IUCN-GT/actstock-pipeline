@@ -88,7 +88,7 @@ def get_etf_top_holdings(
                 avg_volume,
                 current_price,
                 market_cap
-            FROM analytics_etf_top_holdings
+            FROM 09_analytics_etf_top_holdings
             WHERE etf_ticker = %(etf_ticker)s
         """
         
@@ -105,7 +105,7 @@ def get_etf_top_holdings(
             params['as_of_date'] = as_of_date
         else:
             # Use latest date
-            query += " AND as_of_date = (SELECT MAX(as_of_date) FROM analytics_etf_top_holdings WHERE etf_ticker = %(etf_ticker)s)"
+            query += " AND as_of_date = (SELECT MAX(as_of_date) FROM 09_analytics_etf_top_holdings WHERE etf_ticker = %(etf_ticker)s)"
         
         query += " ORDER BY time_period, rank_position"
         
@@ -190,7 +190,7 @@ def get_all_etf_holdings(
                 avg_volume,
                 current_price,
                 market_cap
-            FROM analytics_etf_top_holdings
+            FROM 09_analytics_etf_top_holdings
             WHERE time_period = %(time_period)s
         """
         
@@ -206,7 +206,7 @@ def get_all_etf_holdings(
             query += " AND as_of_date = %(as_of_date)s"
             params['as_of_date'] = as_of_date
         else:
-            query += " AND as_of_date = (SELECT MAX(as_of_date) FROM analytics_etf_top_holdings WHERE time_period = %(time_period)s)"
+            query += " AND as_of_date = (SELECT MAX(as_of_date) FROM 09_analytics_etf_top_holdings WHERE time_period = %(time_period)s)"
         
         query += " ORDER BY etf_ticker, rank_position LIMIT %(limit)s"
         params['limit'] = limit * 5  # Each ETF has up to 5 holdings
@@ -274,7 +274,7 @@ def get_holdings_summary(
                 COUNT(DISTINCT etf_ticker) as total_etfs,
                 COUNT(*) as total_holdings,
                 MAX(as_of_date) as as_of_date
-            FROM analytics_etf_top_holdings
+            FROM 09_analytics_etf_top_holdings
             WHERE time_period = %(time_period)s
         """
         
@@ -326,10 +326,10 @@ def compare_holding_across_etfs(
                 total_return,
                 volatility,
                 as_of_date
-            FROM analytics_etf_top_holdings
+            FROM 09_analytics_etf_top_holdings
             WHERE holding_ticker = %(holding_ticker)s
               AND time_period = %(time_period)s
-              AND as_of_date = (SELECT MAX(as_of_date) FROM analytics_etf_top_holdings WHERE time_period = %(time_period)s)
+              AND as_of_date = (SELECT MAX(as_of_date) FROM 09_analytics_etf_top_holdings WHERE time_period = %(time_period)s)
             ORDER BY rank_position
         """
         

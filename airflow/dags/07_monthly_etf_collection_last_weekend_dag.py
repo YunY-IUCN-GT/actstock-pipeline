@@ -106,7 +106,7 @@ def collect_all_etf_monthly_data(**context):
                     price_change_pct = 0.0
                 
                 insert_query = """
-                    INSERT INTO collected_daily_etf_ohlc (
+                    INSERT INTO 01_collected_daily_etf_ohlc (
                         ticker, trade_date, open_price, high_price, low_price,
                         close_price, volume, price_change_percent
                     ) VALUES (
@@ -208,7 +208,7 @@ def verify_monthly_results(**context):
                 etf_type,
                 COUNT(DISTINCT etf_ticker) as etf_count,
                 COUNT(*) as total_records
-            FROM analytics_etf_top_holdings
+            FROM 09_analytics_etf_top_holdings
             WHERE as_of_date >= CURRENT_DATE - INTERVAL '2 days'
             GROUP BY etf_type
         """

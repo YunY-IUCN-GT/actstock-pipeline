@@ -12,7 +12,7 @@ Dependencies:
 → 모든 일일 파이프라인 완료 후 실행
 
 Output:
-- analytics_monthly_portfolio 테이블
+- 08_analytics_monthly_portfolio 테이블
 """
 
 from airflow import DAG
@@ -120,7 +120,7 @@ with DAG(
                 ROUND(SUM(final_weight) * 100, 2) as total_weight,
                 MIN(final_rank) as min_rank,
                 MAX(final_rank) as max_rank
-            FROM analytics_monthly_portfolio
+            FROM 08_analytics_monthly_portfolio
             WHERE rebalance_date = %s
         """, (execution_date,))
         
@@ -144,7 +144,7 @@ with DAG(
             SELECT final_rank, ticker, company_name, 
                    ROUND(final_weight * 100, 2) as weight_pct,
                    score, source_periods
-            FROM analytics_monthly_portfolio
+            FROM 08_analytics_monthly_portfolio
             WHERE rebalance_date = %s
             ORDER BY final_rank
             LIMIT 10

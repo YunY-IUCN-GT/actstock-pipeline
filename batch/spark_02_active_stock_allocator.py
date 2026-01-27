@@ -5,7 +5,7 @@
 Spark Batch Job - Active Stock Portfolio Allocator (5-Stage Workflow)
 Uses trending ETFs identified in Stage 3 (11:00 UTC) to build portfolio allocations.
 Calculates multi-period allocations (5d, 10d, 20d):
-  - Reads trending ETFs from analytics_trending_etfs (Stage 3 output)
+  - Reads trending ETFs from 03_analytics_trending_etfs (Stage 3 output)
   - For each trending ETF: selects TOP 1 best-performing stock from holdings
   - Weights by: Performance × Inverse Market Cap
   - Produces 3 separate portfolios: 5-day, 10-day, 20-day windows
@@ -77,7 +77,7 @@ class ActiveStockAllocator:
                 spy_return_20d,
                 outperformance,
                 rank_by_outperformance
-            FROM analytics_trending_etfs
+            FROM 03_analytics_trending_etfs
             WHERE as_of_date = '{as_of_date}'
               AND is_trending = TRUE
             ORDER BY rank_by_outperformance
@@ -114,7 +114,7 @@ class ActiveStockAllocator:
                 ticker,
                 trade_date,
                 close_price
-            FROM collected_daily_etf_ohlc
+            FROM 01_collected_daily_etf_ohlc
             WHERE trade_date >= '{cutoff_date}'
               AND ticker IN ('SPY', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC', 'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB')
             ORDER BY ticker, trade_date
@@ -149,7 +149,7 @@ class ActiveStockAllocator:
                 trade_date,
                 close_price,
                 market_cap
-            FROM collected_daily_stock_history
+            FROM 06_collected_daily_stock_history
             WHERE trade_date >= '{cutoff_date}'
               AND sector IS NOT NULL
               AND sector != 'Unknown'
@@ -467,7 +467,7 @@ class ActiveStockAllocator:
             period_days = row['period_days']
             
             upsert_query = """
-                INSERT INTO analytics_portfolio_allocation (
+                INSERT INTO 05_analytics_portfolio_allocation (
                     as_of_date, ticker, company_name, sector, market_cap,
                     return_20d, portfolio_weight, 
                     allocation_reason, rank_20d, period_days
@@ -591,7 +591,7 @@ class ActiveStockAllocator:
         Main execution logic - Stage 5 of 5-Stage Pipeline (13:00 UTC)
         
         Workflow:
-          1. Load trending ETFs from Stage 3 (analytics_trending_etfs)
+          1. Load trending ETFs from Stage 3 (03_analytics_trending_etfs)
           2. Load stock returns and holdings from Stage 4 
           3. For each period (5d, 10d, 20d):
              - Build portfolio allocation 
@@ -628,7 +628,7 @@ class ActiveStockAllocator:
                 SELECT DISTINCT 
                     etf_ticker,
                     ticker as holding_ticker
-                FROM collected_etf_holdings
+                FROM 04_collected_etf_holdings
                 WHERE as_of_date >= '{as_of_date - timedelta(days=30)}'
             ) as holdings"""
             

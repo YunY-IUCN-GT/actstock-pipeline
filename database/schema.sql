@@ -19,7 +19,7 @@
 -- Producer: kafka_producer_conditional_holdings.py
 -- Consumer: kafka_consumer_stock_daily.py
 -- 읽기: Spark (Stage 5), API
-CREATE TABLE IF NOT EXISTS collected_daily_stock_history (
+CREATE TABLE IF NOT EXISTS 06_collected_daily_stock_history (
     id SERIAL PRIMARY KEY,
     ticker VARCHAR(10) NOT NULL,
     company_name VARCHAR(255),
@@ -40,14 +40,14 @@ CREATE TABLE IF NOT EXISTS collected_daily_stock_history (
 -- 수집: kafka_producer_etf_meta.py → Topic → Consumer
 -- 저장: kafka_consumer_market_writer.py
 -- 읽기: Spark, API
-CREATE TABLE IF NOT EXISTS collected_meta_etf (
+CREATE TABLE IF NOT EXISTS 00_collected_meta_etf (
     ticker VARCHAR(10) PRIMARY KEY,
     etf_type VARCHAR(20) NOT NULL, -- benchmark | sector
     sector_name VARCHAR(100),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO collected_meta_etf (ticker, etf_type, sector_name)
+INSERT INTO 00_collected_meta_etf (ticker, etf_type, sector_name)
 VALUES
     ('SPY', 'benchmark', NULL),
     ('QQQ', 'both', 'Technology'),
@@ -70,9 +70,9 @@ ON CONFLICT (ticker) DO NOTHING;
 -- 수집: kafka_producer_etf_daily.py → Topic → Consumer
 -- 저장: kafka_consumer_market_writer.py
 -- 읽기: Spark, API
-CREATE TABLE IF NOT EXISTS collected_daily_etf_ohlc (
+CREATE TABLE IF NOT EXISTS 01_collected_daily_etf_ohlc (
     id SERIAL PRIMARY KEY,
-    ticker VARCHAR(10) NOT NULL REFERENCES collected_meta_etf(ticker),
+    ticker VARCHAR(10) NOT NULL REFERENCES 00_collected_meta_etf(ticker),
     trade_date DATE NOT NULL,
     open_price NUMERIC(10, 2),
     high_price NUMERIC(10, 2),
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS collected_monthly_benchmark_holdings (
 -- 액티브 포트폴리오 배분 (트렌딩 섹터 기반)
 -- 계산: spark_batch_portfolio.py (Airflow DAG가 스케줄링)
 -- 읽기: API, Dashboard
-CREATE TABLE IF NOT EXISTS analytics_portfolio_allocation (
+CREATE TABLE IF NOT EXISTS 05_analytics_portfolio_allocation (
     id SERIAL PRIMARY KEY,
     as_of_date DATE NOT NULL,
     ticker VARCHAR(10) NOT NULL,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS analytics_stock_trending (
 -- 생성: spark_monthly_portfolio_rebalancer.py (매월 마지막 일요일)
 -- 읽기: API, Dashboard
 -- 용도: 다음 20영업일 동안 유지할 최종 포트폴리오
-CREATE TABLE IF NOT EXISTS analytics_monthly_portfolio (
+CREATE TABLE IF NOT EXISTS 08_analytics_monthly_portfolio (
     id SERIAL PRIMARY KEY,
     ticker VARCHAR(10) NOT NULL,
     company_name VARCHAR(255),
@@ -225,28 +225,28 @@ CREATE TABLE IF NOT EXISTS logs_consumer_error (
 -- ========================================
 
 -- Collected 테이블 인덱스 (Batch collection only)
-CREATE INDEX IF NOT EXISTS idx_collected_stock_date ON collected_daily_stock_history(trade_date DESC);
-CREATE INDEX IF NOT EXISTS idx_collected_stock_sector ON collected_daily_stock_history(sector);
-CREATE INDEX IF NOT EXISTS idx_collected_stock_ticker ON collected_daily_stock_history(ticker);
-CREATE INDEX IF NOT EXISTS idx_collected_meta_type ON collected_meta_etf(etf_type);
-CREATE INDEX IF NOT EXISTS idx_collected_meta_sector ON collected_meta_etf(sector_name);
-CREATE INDEX IF NOT EXISTS idx_collected_etf_ticker ON collected_daily_etf_ohlc(ticker);
-CREATE INDEX IF NOT EXISTS idx_collected_etf_date ON collected_daily_etf_ohlc(trade_date DESC);
+CREATE INDEX IF NOT EXISTS idx_collected_stock_date ON 06_collected_daily_stock_history(trade_date DESC);
+CREATE INDEX IF NOT EXISTS idx_collected_stock_sector ON 06_collected_daily_stock_history(sector);
+CREATE INDEX IF NOT EXISTS idx_collected_stock_ticker ON 06_collected_daily_stock_history(ticker);
+CREATE INDEX IF NOT EXISTS idx_collected_meta_type ON 00_collected_meta_etf(etf_type);
+CREATE INDEX IF NOT EXISTS idx_collected_meta_sector ON 00_collected_meta_etf(sector_name);
+CREATE INDEX IF NOT EXISTS idx_collected_etf_ticker ON 01_collected_daily_etf_ohlc(ticker);
+CREATE INDEX IF NOT EXISTS idx_collected_etf_date ON 01_collected_daily_etf_ohlc(trade_date DESC);
 CREATE INDEX IF NOT EXISTS idx_collected_benchmark_etf ON collected_monthly_benchmark_holdings(etf_ticker);
 CREATE INDEX IF NOT EXISTS idx_collected_benchmark_date ON collected_monthly_benchmark_holdings(as_of_date DESC);
 CREATE INDEX IF NOT EXISTS idx_collected_benchmark_holding ON collected_monthly_benchmark_holdings(holding_ticker);
 
 -- Analytics 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_date ON analytics_portfolio_allocation(as_of_date DESC);
-CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_ticker ON analytics_portfolio_allocation(ticker);
-CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_sector ON analytics_portfolio_allocation(sector);
-CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_weight ON analytics_portfolio_allocation(portfolio_weight DESC);
-CREATE INDEX IF NOT EXISTS idx_analytics_trending_etf_date ON analytics_trending_etfs(as_of_date DESC);
-CREATE INDEX IF NOT EXISTS idx_analytics_trending_etf_ticker ON analytics_trending_etfs(etf_ticker);
-CREATE INDEX IF NOT EXISTS idx_analytics_monthly_portfolio_date ON analytics_monthly_portfolio(rebalance_date DESC);
-CREATE INDEX IF NOT EXISTS idx_analytics_monthly_portfolio_ticker ON analytics_monthly_portfolio(ticker);
-CREATE INDEX IF NOT EXISTS idx_analytics_monthly_portfolio_rank ON analytics_monthly_portfolio(final_rank);
-CREATE INDEX IF NOT EXISTS idx_analytics_monthly_portfolio_valid ON analytics_monthly_portfolio(valid_until DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_date ON 05_analytics_portfolio_allocation(as_of_date DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_ticker ON 05_analytics_portfolio_allocation(ticker);
+CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_sector ON 05_analytics_portfolio_allocation(sector);
+CREATE INDEX IF NOT EXISTS idx_analytics_portfolio_weight ON 05_analytics_portfolio_allocation(portfolio_weight DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_trending_etf_date ON 03_analytics_trending_etfs(as_of_date DESC);
+CREATE INDEX IF NOT EXISTS idx_analytics_trending_etf_ticker ON 03_analytics_trending_etfs(etf_ticker);
+CREATE INDEX IF NOT EXISTS idx_08_analytics_monthly_portfolio_date ON 08_analytics_monthly_portfolio(rebalance_date DESC);
+CREATE INDEX IF NOT EXISTS idx_08_analytics_monthly_portfolio_ticker ON 08_analytics_monthly_portfolio(ticker);
+CREATE INDEX IF NOT EXISTS idx_08_analytics_monthly_portfolio_rank ON 08_analytics_monthly_portfolio(final_rank);
+CREATE INDEX IF NOT EXISTS idx_08_analytics_monthly_portfolio_valid ON 08_analytics_monthly_portfolio(valid_until DESC);
 
 -- Logs 테이블 인덱스
 CREATE INDEX IF NOT EXISTS idx_logs_consumer_received ON logs_consumer_error(received_at DESC);

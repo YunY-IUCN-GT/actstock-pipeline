@@ -35,7 +35,7 @@ async def get_etf_holdings_data(days: int = Query(60, ge=1, le=365)):
         SELECT
             ticker, company_name, sector, trade_date,
             close_price, price_change_percent, volume, market_cap
-        FROM collected_daily_stock_history
+        FROM 06_collected_daily_stock_history
         WHERE trade_date >= CURRENT_DATE - INTERVAL '%s days'
         ORDER BY trade_date DESC, ticker
     """
@@ -68,7 +68,7 @@ async def get_spy_benchmark_data(days: int = Query(60, ge=1, le=365)):
     
     query = """
         SELECT trade_date, price_change_percent, close_price
-        FROM collected_daily_etf_ohlc
+        FROM 01_collected_daily_etf_ohlc
         WHERE ticker = 'SPY'
         AND trade_date >= CURRENT_DATE - INTERVAL '%s days'
         ORDER BY trade_date DESC
@@ -103,7 +103,7 @@ async def get_etf_benchmark_data(ticker: str = Query(...), days: int = Query(60,
 
     query = """
         SELECT trade_date, price_change_percent, close_price, ticker
-        FROM collected_daily_etf_ohlc
+        FROM 01_collected_daily_etf_ohlc
         WHERE ticker = %s
         AND trade_date >= CURRENT_DATE - INTERVAL '%s days'
         ORDER BY trade_date DESC
@@ -144,7 +144,7 @@ async def get_active_allocations(
         date_filter = "as_of_date = %s"
         date_param = as_of_date
     else:
-        date_filter = "as_of_date = (SELECT MAX(as_of_date) FROM analytics_portfolio_allocation WHERE period_days = %s)"
+        date_filter = "as_of_date = (SELECT MAX(as_of_date) FROM 05_analytics_portfolio_allocation WHERE period_days = %s)"
         date_param = period_days
     
     query = f"""
@@ -170,7 +170,7 @@ async def get_active_allocations(
             allocation_reason,
             period_days,
             created_at
-        FROM analytics_portfolio_allocation
+        FROM 05_analytics_portfolio_allocation
         WHERE {date_filter}
           AND period_days = %s
         ORDER BY portfolio_weight DESC
@@ -210,7 +210,7 @@ async def get_sector_trending_data():
                 COUNT(*) as stock_count,
                 SUM(volume) as total_volume,
                 MAX(trade_date) as latest_date
-            FROM collected_daily_stock_history
+            FROM 06_collected_daily_stock_history
             WHERE trade_date >= CURRENT_DATE - INTERVAL '7 days'
             GROUP BY sector
         )
@@ -269,7 +269,7 @@ async def get_monthly_performance(months: int = Query(12, ge=1, le=24)):
                     ORDER BY trade_date
                     RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
                 ) as month_close
-            FROM collected_daily_etf_ohlc
+            FROM 01_collected_daily_etf_ohlc
             WHERE trade_date >= CURRENT_DATE - INTERVAL '%s months'
         )
         SELECT DISTINCT
@@ -300,7 +300,7 @@ async def get_realtime_summary():
     """
     ⚠️ DEPRECATED: Real-time collection disabled (yfinance rate limit)
     
-    Use batch data from collected_daily_stock_history instead.
+    Use batch data from 06_collected_daily_stock_history instead.
     This endpoint returns empty data.
     
     Returns:
@@ -348,7 +348,7 @@ async def get_top_performers(
                 s.close_price,
                 ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date) as rn_start,
                 ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date DESC) as rn_end
-            FROM collected_daily_stock_history s, date_range dr
+            FROM 06_collected_daily_stock_history s, date_range dr
             WHERE s.trade_date BETWEEN dr.start_date AND dr.end_date
         ),
         stock_returns AS (
@@ -409,7 +409,7 @@ async def get_etf_list():
             etf_type,
             sector_name,
             description
-        FROM collected_meta_etf
+        FROM 00_collected_meta_etf
         ORDER BY ticker
     """
     

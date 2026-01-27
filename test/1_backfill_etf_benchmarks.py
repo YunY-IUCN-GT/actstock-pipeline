@@ -3,7 +3,7 @@ ETF Benchmark Data Backfill Script
 
 벤치마크 및 섹터 ETF의 과거 일별 OHLC 데이터를 수집합니다.
 - 대상: SPY, QQQ, IWM, EWY, DIA, SCHD (벤치마크) + XLF, XLV, XLY, XLC, XLI, XLP, XLU, XLRE, XLB (섹터)
-- 저장: collected_daily_etf_ohlc 테이블
+- 저장: 01_collected_daily_etf_ohlc 테이블
 - 기능: 스마트 캐싱 (24시간), 거래일 기준, Rate-limit 보호
 """
 
@@ -162,7 +162,7 @@ def insert_to_database(data: list):
         for record in data:
             # 중복 체크 후 삽입
             cursor.execute("""
-                INSERT INTO collected_daily_etf_ohlc 
+                INSERT INTO 01_collected_daily_etf_ohlc 
                 (symbol, date, open, high, low, close, volume, collected_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (symbol, date) DO NOTHING

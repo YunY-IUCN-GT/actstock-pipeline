@@ -80,7 +80,7 @@ class StockDailyDataConsumer:
             
             # Insert query with conflict handling (upsert)
             insert_query = """
-                INSERT INTO collected_daily_stock_history (
+                INSERT INTO 06_collected_daily_stock_history (
                     ticker,
                     company_name,
                     sector,

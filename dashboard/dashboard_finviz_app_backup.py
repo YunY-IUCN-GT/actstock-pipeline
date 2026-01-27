@@ -255,7 +255,7 @@ def update_trending_etfs(n):
         
     except Exception as e:
         logger.error(f"Error fetching trending ETFs: {e}")
-        return html.P("⚠️ 데이터 조회 실패. analytics_trending_etfs 테이블 확인 필요.", 
+        return html.P("⚠️ 데이터 조회 실패. 03_analytics_trending_etfs 테이블 확인 필요.", 
                      style={'color': '#e74c3c', 'fontSize': '14px', 'padding': '10px'})
 
 

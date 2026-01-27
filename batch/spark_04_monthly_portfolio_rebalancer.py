@@ -11,8 +11,8 @@ Spark Job: Monthly Portfolio Rebalancer
    - 5일만: rank=20부터
 3. 신규 종목이 2개 이상이면 기존 리스트 가중치 순으로 배치 (20위→19위→18위...)
 
-입력: analytics_portfolio_allocation (period_days: 5, 10, 20)
-출력: analytics_monthly_portfolio
+입력: 05_analytics_portfolio_allocation (period_days: 5, 10, 20)
+출력: 08_analytics_monthly_portfolio
 """
 
 from pyspark.sql import SparkSession
@@ -85,7 +85,7 @@ class MonthlyPortfolioRebalancer:
                     allocation_reason,
                     period_days,
                     as_of_date
-                FROM analytics_portfolio_allocation
+                FROM 05_analytics_portfolio_allocation
                 WHERE period_days = {period}
                   AND as_of_date = '{as_of_date}'
                 ) AS portfolio_{period}d
@@ -281,7 +281,7 @@ class MonthlyPortfolioRebalancer:
     
     def save_monthly_portfolio(self, portfolio_df: 'DataFrame'):
         """
-        최종 월간 포트폴리오를 analytics_monthly_portfolio 테이블에 저장
+        최종 월간 포트폴리오를 08_analytics_monthly_portfolio 테이블에 저장
         
         Schema:
         - ticker, company_name, sector
@@ -318,7 +318,7 @@ class MonthlyPortfolioRebalancer:
             self.jdbc_url, self.db_user, self.db_password
         ) as conn:
             stmt = conn.createStatement()
-            delete_query = f"DELETE FROM analytics_monthly_portfolio WHERE rebalance_date = '{rebalance_date}'"
+            delete_query = f"DELETE FROM 08_analytics_monthly_portfolio WHERE rebalance_date = '{rebalance_date}'"
             deleted = stmt.executeUpdate(delete_query)
             logger.info(f"기존 데이터 삭제: {deleted}건")
         
@@ -326,7 +326,7 @@ class MonthlyPortfolioRebalancer:
         output_df.write \
             .format("jdbc") \
             .option("url", self.jdbc_url) \
-            .option("dbtable", "analytics_monthly_portfolio") \
+            .option("dbtable", "08_analytics_monthly_portfolio") \
             .option("user", self.db_user) \
             .option("password", self.db_password) \
             .mode("append") \
