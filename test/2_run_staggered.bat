@@ -20,7 +20,7 @@ echo 대기 시간: %DELAY%초
 echo.
 
 echo 배치 1/2: QQQ, XLF, XLV, XLY, XLC (5개)
-python test\2_staggered_sector_backfill.py --days %DAYS% --delay %DELAY% --batch 5 --start-idx 0
+python 2_staggered_sector_backfill.py --days %DAYS% --delay %DELAY% --batch 5 --start-idx 0
 
 echo.
 echo 잠시 대기 중... (30초)
@@ -28,7 +28,7 @@ timeout /t 30 /nobreak
 
 echo.
 echo 배치 2/2: XLI, XLP, XLU, XLRE, XLB (5개)
-python test\2_staggered_sector_backfill.py --days %DAYS% --delay %DELAY% --batch 5 --start-idx 5
+python 2_staggered_sector_backfill.py --days %DAYS% --delay %DELAY% --batch 5 --start-idx 5
 
 echo.
 echo ========================================

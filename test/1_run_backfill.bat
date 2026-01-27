@@ -17,7 +17,7 @@ echo 수집 거래일: %DAYS%일
 echo.
 
 REM Python 스크립트 실행
-python test\1_backfill_etf_benchmarks.py --days %DAYS%
+python 1_backfill_etf_benchmarks.py --days %DAYS%
 
 echo.
 echo ========================================
