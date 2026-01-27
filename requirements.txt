@@ -1,0 +1,39 @@
+# 일반적인 패키지
+pandas==2.1.0
+numpy==1.25.2
+python-dotenv==1.0.0
+requests==2.31.0
+
+# 데이터 시각화 및 대시보드
+dash==2.13.0
+plotly==5.16.1
+dash-bootstrap-components==1.5.0
+
+# API 서빙
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+
+# Kafka 관련
+kafka-python==2.0.2
+pyspark==3.5.0
+
+# 머신러닝 & 예측
+numpy==1.25.2
+
+# 데이터베이스 관련
+psycopg2-binary==2.9.7
+SQLAlchemy==2.0.23
+
+# 주식 데이터 관련
+yfinance==0.2.54
+
+# 로깅 및 유틸리티
+python-json-logger==2.0.7
+
+# Web serving
+gunicorn==21.2.0
+
+# 테스팅
+pytest==7.4.3
+httpx==0.25.1

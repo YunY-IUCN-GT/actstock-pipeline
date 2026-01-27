@@ -1,0 +1,1053 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+ETF Holdings 대시보드
+FastAPI를 통해 데이터를 조회하여 시각화
+"""
+
+import dash
+from dash import dcc, html, callback, Input, Output
+import plotly.graph_objects as go
+import pandas as pd
+from datetime import datetime, timedelta, date
+import logging
+import os
+import requests
+from typing import Dict, List, Any
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# API 설정
+API_BASE_URL = os.getenv('API_BASE_URL', 'http://api:8000')
+API_KEY = os.getenv('API_KEY', 'dev-secret-key-12345')
+API_HEADERS = {
+    'X-API-Key': API_KEY,
+    'Content-Type': 'application/json'
+}
+
+
+def api_request(endpoint: str, params: Dict = None) -> Any:
+    """
+    API 요청 헬퍼 함수
+    
+    Args:
+        endpoint: API 엔드포인트 경로 (예: '/dashboard/etf-holdings')
+        params: 쿼리 파라미터 딕셔너리
+    
+    Returns:
+        JSON 응답 데이터
+    """
+    try:
+        url = f"{API_BASE_URL}{endpoint}"
+        logger.info(f"📡 API Request: {url} with params: {params}")
+        
+        response = requests.get(url, headers=API_HEADERS, params=params, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        logger.info(f"✅ API Response: {len(data) if isinstance(data, list) else 'dict'} records")
+        return data
+        
+    except requests.exceptions.RequestException as e:
+        logger.error(f"❌ API Request failed: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"❌ Unexpected error: {e}")
+        return None
+
+
+def get_etf_holdings_data() -> pd.DataFrame:
+    """ETF Holdings 일별 성과 데이터 조회 (API)"""
+    data = api_request('/dashboard/etf-holdings', {'days': 60})
+    
+    if not data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(data)
+    if 'trade_date' in df.columns:
+        df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+    if 'close_price' in df.columns:
+        df['current_price'] = df['close_price']
+    
+    return df
+
+
+def get_spy_benchmark_data() -> pd.DataFrame:
+    """SPY 벤치마크 데이터 조회 (API)"""
+    data = api_request('/dashboard/spy-benchmark', {'days': 60})
+    
+    if not data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(data)
+    if 'trade_date' in df.columns:
+        df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+    
+    return df
+
+
+def get_benchmark_data(ticker: str = 'SPY') -> pd.DataFrame:
+    """벤치마크 데이터 조회 (API)"""
+    data = api_request('/dashboard/spy-benchmark', {'days': 60})
+    
+    if not data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(data)
+    if 'trade_date' in df.columns:
+        df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+    
+    return df
+
+
+def get_benchmark_timeseries(days: int = 60) -> pd.DataFrame:
+    """벤치마크 ETF 누적 수익률 시계열 (API)"""
+    # SPY 데이터만 사용
+    data = api_request('/dashboard/spy-benchmark', {'days': days})
+    
+    if not data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(data)
+    if df.empty:
+        return pd.DataFrame()
+    
+    df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+    df['close_price'] = pd.to_numeric(df['close_price'], errors='coerce')
+    df = df.dropna(subset=['close_price'])
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    df = df.sort_values('trade_date')
+    base_price = df['close_price'].iloc[0]
+    df['cum_return'] = (df['close_price'] / base_price - 1.0) * 100.0
+    df['ticker'] = 'SPY'
+    
+    return df[['ticker', 'trade_date', 'cum_return']]
+
+
+def get_active_holdings_timeseries(days: int = 60, top_n: int = 10) -> pd.DataFrame:
+    """Active ETF holdings(Top-N 동일비중) 누적 수익률 시계열 (API)"""
+    # 최고 성과 종목 조회
+    top_data = api_request('/dashboard/top-performers', {'limit': top_n, 'window_days': 30})
+    
+    if not top_data:
+        return pd.DataFrame()
+    
+    tickers = [item['ticker'] for item in top_data[:top_n]]
+    
+    if not tickers:
+        return pd.DataFrame()
+    
+    # ETF holdings 데이터에서 해당 티커들의 시계열 조회
+    holdings_data = api_request('/dashboard/etf-holdings', {'days': days})
+    
+    if not holdings_data:
+        return pd.DataFrame()
+    
+    df = pd.DataFrame(holdings_data)
+    df = df[df['ticker'].isin(tickers)]
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    df['trade_date'] = pd.to_datetime(df['trade_date']).dt.date
+    df['close_price'] = pd.to_numeric(df['close_price'], errors='coerce')
+    df = df.dropna(subset=['close_price'])
+    
+    if df.empty:
+        return pd.DataFrame()
+    
+    pivot = df.pivot_table(index='trade_date', columns='ticker', values='close_price', aggfunc='last')
+    
+    if pivot.empty:
+        return pd.DataFrame()
+    
+    daily_returns = pivot.pct_change()
+    portfolio_returns = daily_returns.mean(axis=1, skipna=True).fillna(0)
+    cum_returns = (1 + portfolio_returns).cumprod() - 1
+    
+    return pd.DataFrame({'trade_date': cum_returns.index, 'cum_return': cum_returns.values * 100})
+
+
+def create_benchmark_vs_active_chart(benchmark_df: pd.DataFrame, active_df: pd.DataFrame) -> go.Figure:
+    """벤치마크 vs Active holdings 시계열 라인 차트"""
+    fig = go.Figure()
+
+    if not benchmark_df.empty:
+        for ticker in sorted(benchmark_df['ticker'].unique()):
+            subset = benchmark_df[benchmark_df['ticker'] == ticker]
+            fig.add_trace(go.Scatter(
+                x=subset['trade_date'],
+                y=subset['cum_return'],
+                mode='lines',
+                name=ticker,
+                line=dict(width=2)
+            ))
+
+    if not active_df.empty:
+        fig.add_trace(go.Scatter(
+            x=active_df['trade_date'],
+            y=active_df['cum_return'],
+            mode='lines',
+            name='Active Holdings',
+            line=dict(color='black', width=3)
+        ))
+
+    if benchmark_df.empty and active_df.empty:
+        fig.add_annotation(text="데이터 없음", showarrow=False)
+
+    fig.update_layout(
+        title="벤치마크 vs Active Holdings (누적 수익률)",
+        xaxis_title="날짜",
+        yaxis_title="누적 수익률 (%)",
+        height=420,
+        margin=dict(l=50, r=50, t=60, b=50),
+        plot_bgcolor='#f8f9fa',
+        hovermode='x unified'
+    )
+
+    return fig
+
+
+def get_monthly_trending_data(db: DatabaseHelper):
+    """월별 트렌딩 데이터 조회"""
+    sector_query = """
+        SELECT year, month, sector, avg_monthly_return, is_trending
+        FROM monthly_sector_trending
+        ORDER BY year DESC, month DESC, avg_monthly_return DESC
+        LIMIT 20
+    """
+    
+    stock_query = """
+        SELECT year, month, ticker, company_name, sector, avg_monthly_return, is_trending
+        FROM monthly_stock_trending
+        WHERE is_trending = TRUE
+        ORDER BY year DESC, month DESC, avg_monthly_return DESC
+        LIMIT 20
+    """
+    
+    sector_rows = db.fetch_all(sector_query)
+    stock_rows = db.fetch_all(stock_query)
+    
+    # Fallback 1: Month-to-date (current month start to today)
+    if not stock_rows:
+        mtd_rows = compute_month_to_date_trending(db, top_n=10)
+        stock_rows = mtd_rows
+    
+    # Fallback 2: From first available date to today (history-to-date)
+    if not stock_rows:
+        htd_rows = compute_history_to_date_trending(db, top_n=10)
+        stock_rows = htd_rows
+    
+    return sector_rows, stock_rows
+
+
+def compute_month_to_date_trending(db: DatabaseHelper, top_n: int = 10):
+    """현재 월 시작부터 오늘까지의 데이터로 월별 트렌딩 종목 계산 (MTD)
+    - 트렌딩 섹터: 월 시작 이후 평균 수익률 > 0 AND SPY 월간 수익률 초과
+    - 각 트렌딩 섹터의 상위 1개 종목을 반환
+    Returns: list[dict] with keys: year, month, ticker, company_name, sector, avg_monthly_return, is_trending
+    """
+    try:
+        # Month start
+        month_start_rows = db.fetch_all(
+            "SELECT DATE_TRUNC('month', MAX(trade_date))::DATE AS month_start FROM stock_daily_history"
+        )
+        if not month_start_rows:
+            return []
+        month_start = month_start_rows[0].get('month_start')
+        if not month_start:
+            return []
+
+        # SPY monthly return (from etf_daily_ohlc)
+        spy_rows = db.fetch_all(
+            """
+            SELECT AVG(price_change_percent) AS spy_monthly
+            FROM etf_daily_ohlc
+            WHERE ticker = 'SPY' AND trade_date >= %s
+            """,
+            (month_start,)
+        )
+        spy_monthly = float(spy_rows[0].get('spy_monthly') or 0) if spy_rows else 0.0
+
+        # Sector monthly averages (MTD)
+        sector_rows = db.fetch_all(
+            """
+            SELECT sector, AVG(price_change_percent) AS sector_monthly
+            FROM stock_daily_history
+            WHERE trade_date >= %s AND sector != 'Benchmark' AND ticker != 'SPY'
+            GROUP BY sector
+            ORDER BY sector_monthly DESC
+            """,
+            (month_start,)
+        )
+        if not sector_rows:
+            return []
+
+        # Trending sectors: positive; if none positive, take top_n regardless of SPY (fallback)
+        trending_sectors = [
+            r.get('sector') for r in sector_rows
+            if (r.get('sector_monthly') is not None) and (float(r.get('sector_monthly')) > 0)
+        ]
+        if not trending_sectors:
+            trending_sectors = [r.get('sector') for r in sector_rows][:top_n]
+        else:
+            trending_sectors = trending_sectors[:top_n]
+
+        results = []
+        for sector in trending_sectors:
+            top_stock_rows = db.fetch_all(
+                """
+                SELECT ticker, company_name, sector, AVG(price_change_percent) AS avg_change
+                FROM stock_daily_history
+                WHERE trade_date >= %s AND sector = %s AND ticker != 'SPY'
+                GROUP BY ticker, company_name, sector
+                ORDER BY avg_change DESC
+                LIMIT 1
+                """,
+                (month_start, sector)
+            )
+            if top_stock_rows:
+                ts = top_stock_rows[0]
+                avg_change = float(ts.get('avg_change') or 0)
+                mdate = pd.to_datetime(month_start)
+                results.append({
+                    'year': int(mdate.year),
+                    'month': int(mdate.month),
+                    'ticker': ts.get('ticker'),
+                    'company_name': ts.get('company_name'),
+                    'sector': ts.get('sector'),
+                    'avg_monthly_return': avg_change,
+                    'is_trending': True
+                })
+        return results
+    except Exception as e:
+        logger.error(f"MTD 월별 트렌딩 계산 실패: {e}")
+        return []
+
+
+def compute_history_to_date_trending(db: DatabaseHelper, top_n: int = 10):
+    """최초 데이터 수집일부터 오늘까지의 범위로 트렌딩 계산 (History-To-Date)
+    - 트렌딩 섹터: 평균 수익률 > 0 AND SPY 평균 수익률 초과
+    - 각 트렌딩 섹터에서 상위 1개 종목 반환
+    """
+    try:
+        # Get earliest date
+        start_rows = db.fetch_all(
+            "SELECT MIN(trade_date) AS start_date FROM stock_daily_history"
+        )
+        if not start_rows:
+            return []
+        start_date = start_rows[0].get('start_date')
+        if not start_date:
+            return []
+
+        # SPY benchmark over full period (from etf_daily_ohlc)
+        spy_rows = db.fetch_all(
+            """
+            SELECT AVG(price_change_percent) AS spy_avg
+            FROM etf_daily_ohlc
+            WHERE ticker = 'SPY' AND trade_date >= %s
+            """,
+            (start_date,)
+        )
+        spy_avg = float(spy_rows[0].get('spy_avg') or 0) if spy_rows else 0.0
+
+        # Sector averages over full period
+        sector_rows = db.fetch_all(
+            """
+            SELECT sector, AVG(price_change_percent) AS sector_avg
+            FROM stock_daily_history
+            WHERE trade_date >= %s AND sector != 'Benchmark' AND ticker != 'SPY'
+            GROUP BY sector
+            ORDER BY sector_avg DESC
+            """,
+            (start_date,)
+        )
+        if not sector_rows:
+            return []
+
+        # Positive sectors; if none positive, use top_n by average
+        trending_sectors = [
+            r.get('sector') for r in sector_rows
+            if (r.get('sector_avg') is not None) and (float(r.get('sector_avg')) > 0)
+        ]
+        if not trending_sectors:
+            trending_sectors = [r.get('sector') for r in sector_rows][:top_n]
+        else:
+            trending_sectors = trending_sectors[:top_n]
+
+        results = []
+        for sector in trending_sectors:
+            top_stock_rows = db.fetch_all(
+                """
+                SELECT ticker, company_name, sector, AVG(price_change_percent) AS avg_change
+                FROM stock_daily_history
+                WHERE trade_date >= %s AND sector = %s AND ticker != 'SPY'
+                GROUP BY ticker, company_name, sector
+                ORDER BY avg_change DESC
+                LIMIT 1
+                """,
+                (start_date, sector)
+            )
+            if top_stock_rows:
+                ts = top_stock_rows[0]
+                avg_change = float(ts.get('avg_change') or 0)
+                today = pd.Timestamp.today()
+                results.append({
+                    'year': int(today.year),
+                    'month': int(today.month),
+                    'ticker': ts.get('ticker'),
+                    'company_name': ts.get('company_name'),
+                    'sector': ts.get('sector'),
+                    'avg_monthly_return': avg_change,
+                    'is_trending': True
+                })
+        return results
+    except Exception as e:
+        logger.error(f"HTD 트렌딩 계산 실패: {e}")
+        return []
+
+
+def compute_period_trending(df: pd.DataFrame, days: int):
+    """기간별 트렌딩 섹터 및 종목 계산
+    - 트렌딩 섹터: 섹터 ETF 기간 수익률 > 0 AND SPY 기간 수익률 초과
+    - 트렌딩 종목: 트렌딩 섹터 내에서 기간 수익률 1위 종목만 표시
+    
+    수익률 계산 방식:
+    - 섹터 수익률 = 섹터 ETF의 기간 수익률 (예: XLK for Technology)
+    - 종목 기간 수익률 = (최종일 가격 - 시작일 가격) / 시작일 가격 * 100
+    """
+    if df.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    latest_date = df['trade_date'].max()
+    cutoff = latest_date - timedelta(days=days + 3)
+    window_df = df[df['trade_date'] >= cutoff].copy()
+
+    if window_df.empty:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    # SPY 기간 수익률 계산 및 섹터 ETF 수익률 계산 (etf_daily_ohlc 사용)
+    spy_return = 0.0
+    sector_etf_returns = {}  # {sector: return}
+    db_local = None
+    try:
+        db_local = DatabaseHelper()
+        sector_rows = db_local.fetch_all(
+            """
+            SELECT ticker, sector_name
+            FROM etf_metadata
+            WHERE etf_type = 'sector'
+            ORDER BY sector_name
+            """
+        )
+        sector_etfs = {
+            row.get("sector_name"): row.get("ticker")
+            for row in sector_rows
+            if row.get("sector_name") and row.get("ticker")
+        }
+        
+        # SPY 수익률 계산
+        spy_df = get_spy_benchmark_data(db_local)
+        if not spy_df.empty:
+            spy_window = spy_df[spy_df['trade_date'] >= cutoff].sort_values('trade_date')
+            if len(spy_window) >= 2:
+                start_price = float(spy_window.iloc[0]['close_price'])
+                end_price = float(spy_window.iloc[-1]['close_price'])
+                if start_price > 0:
+                    spy_return = ((end_price - start_price) / start_price) * 100
+        
+        # 섹터 ETF 수익률 계산 (etf_daily_ohlc 테이블 사용)
+        for sector, etf_ticker in sector_etfs.items():
+            query = """
+                SELECT trade_date, close_price
+                FROM etf_daily_ohlc
+                WHERE ticker = %s AND trade_date >= %s
+                ORDER BY trade_date
+            """
+            etf_df = pd.DataFrame(db_local.fetch_all(query, (etf_ticker, cutoff)), 
+                                 columns=['trade_date', 'close_price'])
+            
+            if not etf_df.empty and len(etf_df) >= 2:
+                start_price = float(etf_df.iloc[0]['close_price'])
+                end_price = float(etf_df.iloc[-1]['close_price'])
+                if start_price > 0:
+                    sector_etf_returns[sector] = ((end_price - start_price) / start_price) * 100
+                else:
+                    sector_etf_returns[sector] = 0.0
+            else:
+                sector_etf_returns[sector] = 0.0
+                
+    except Exception as e:
+        logger.warning(f"벤치마크 수익률 계산 실패: {e}")
+        spy_return = 0.0
+    finally:
+        if db_local:
+            try:
+                db_local.disconnect()
+            except Exception:
+                pass
+
+    # 각 종목의 기간 수익률 계산 (시작일 가격 대비 종료일 가격 변화율)
+    stock_returns = []
+    for ticker in window_df['ticker'].unique():
+        ticker_df = window_df[window_df['ticker'] == ticker].sort_values('trade_date')
+        if len(ticker_df) >= 2:
+            start_row = ticker_df.iloc[0]
+            end_row = ticker_df.iloc[-1]
+            
+            actual_start_price = float(start_row['current_price']) if pd.notna(start_row['current_price']) else 0
+            end_price = float(end_row['current_price']) if pd.notna(end_row['current_price']) else 0
+            
+            if actual_start_price > 0 and end_price > 0:
+                period_return = ((end_price - actual_start_price) / actual_start_price) * 100
+                stock_returns.append({
+                    'ticker': ticker,
+                    'company_name': end_row['company_name'],
+                    'sector': end_row['sector'],
+                    'period_return': period_return,
+                    'start_price': actual_start_price,
+                    'end_price': end_price
+                })
+
+    if not stock_returns:
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
+
+    stocks_df = pd.DataFrame(stock_returns)
+
+    # 섹터별 집계: 섹터 ETF 수익률 사용 (시가총액 가중 반영)
+    sector_agg = []
+    for sector in stocks_df['sector'].unique():
+        sector_stocks = stocks_df[stocks_df['sector'] == sector]
+        stock_count = len(sector_stocks)
+        
+        # 섹터 ETF 수익률 사용 (없으면 종목 평균으로 대체)
+        sector_return = sector_etf_returns.get(sector)
+        if sector_return is None:
+            sector_return = sector_stocks['period_return'].mean()
+            logger.warning(f"섹터 '{sector}'의 ETF 수익률 없음, 종목 평균 사용: {sector_return:.2f}%")
+        
+        sector_agg.append({
+            'sector': sector,
+            'stock_count': stock_count,
+            'avg_return': sector_return,
+            'cum_return': sector_return  # 호환성
+        })
+    
+    sector_agg = pd.DataFrame(sector_agg)
+
+    # 트렌딩 섹터 플래그: 섹터 ETF 수익률 > 0 AND > SPY
+    sector_agg['is_trending'] = (sector_agg['avg_return'] > 0) & (sector_agg['avg_return'] > spy_return)
+
+    # 트렌딩 섹터만 표시, 성과 순으로 상위 10개
+    trending_sectors_df = sector_agg[sector_agg['is_trending']]
+    trending_sectors_df = trending_sectors_df.sort_values('avg_return', ascending=False).head(10)
+
+    # 각 트렌딩 섹터의 최고 수익 종목(1위)만 선정
+    top_stocks = []
+    for sector in trending_sectors_df['sector'].values:
+        sector_stocks = stocks_df[stocks_df['sector'] == sector].copy()
+        sector_stocks = sector_stocks.sort_values('period_return', ascending=False)
+        if not sector_stocks.empty:
+            top_stock = sector_stocks.iloc[0].copy()
+            top_stock['cum_return'] = top_stock['period_return']  # 호환성을 위해
+            top_stocks.append(top_stock)
+
+    top_stocks_df = pd.DataFrame(top_stocks) if top_stocks else pd.DataFrame()
+
+    # 상세: 트렌딩 섹터별 상위 5개 종목만
+    detailed_stocks = []
+    for sector in trending_sectors_df['sector'].values[:5]:
+        sector_stocks = stocks_df[stocks_df['sector'] == sector].copy()
+        sector_stocks = sector_stocks.sort_values('period_return', ascending=False).head(5)
+        if not sector_stocks.empty:
+            sector_stocks['cum_return'] = sector_stocks['period_return']  # 호환성
+            detailed_stocks.append(sector_stocks)
+
+    detailed_stocks_df = pd.concat(detailed_stocks) if detailed_stocks else pd.DataFrame()
+
+    return trending_sectors_df, top_stocks_df, detailed_stocks_df
+
+
+def create_sector_vs_spy_chart(df: pd.DataFrame, spy_df: pd.DataFrame, days: int, title: str) -> go.Figure:
+    """섹터 성과 vs SPY 벤치마크 차트 생성"""
+    if df.empty:
+        fig = go.Figure()
+        fig.add_annotation(text="데이터 없음", showarrow=False)
+        return fig
+    
+    latest_date = df['trade_date'].max()
+    cutoff = latest_date - timedelta(days=days + 3)
+    window_df = df[df['trade_date'] >= cutoff].copy()
+    
+    # 섹터별 누적 수익률
+    sector_returns = (
+        window_df.groupby('sector')['price_change_percent']
+        .sum()
+        .reset_index()
+        .rename(columns={'price_change_percent': 'cum_return'})
+        .sort_values('cum_return', ascending=False)
+        .head(10)
+    )
+    
+    # SPY 누적 수익률
+    spy_window = spy_df[spy_df['trade_date'] >= cutoff] if not spy_df.empty else pd.DataFrame()
+    spy_return = spy_window['price_change_percent'].sum() if not spy_window.empty else 0
+    
+    fig = go.Figure()
+    
+    # 섹터 바 차트
+    fig.add_trace(go.Bar(
+        x=sector_returns['sector'],
+        y=sector_returns['cum_return'],
+        name='섹터 수익률',
+        marker=dict(
+            color=sector_returns['cum_return'],
+            colorscale='RdYlGn',
+            line=dict(color='rgba(0,0,0,0.3)', width=1)
+        ),
+        text=[f"{v:+.2f}%" for v in sector_returns['cum_return']],
+        textposition='outside'
+    ))
+    
+    # SPY 기준선 (점선)
+    fig.add_trace(go.Scatter(
+        x=sector_returns['sector'],
+        y=[spy_return] * len(sector_returns),
+        mode='lines',
+        name=f'SPY 벤치마크 ({spy_return:+.2f}%)',
+        line=dict(color='#e74c3c', width=3, dash='dash'),
+        hovertemplate=f'SPY: {spy_return:+.2f}%<extra></extra>'
+    ))
+    
+    fig.update_layout(
+        title=title,
+        xaxis_title='섹터',
+        yaxis_title='누적 수익률 (%)',
+        height=400,
+        margin=dict(l=50, r=50, t=60, b=100),
+        showlegend=True,
+        legend=dict(x=0.7, y=1.15, orientation='h'),
+        plot_bgcolor='#f8f9fa',
+        hovermode='x unified'
+    )
+    
+    fig.update_xaxes(tickangle=-45)
+    
+    return fig
+
+
+# Dash 앱 생성
+app = dash.Dash(__name__, meta_tags=[
+    {"name": "viewport", "content": "width=device-width, initial-scale=1"}
+],suppress_callback_exceptions=True)
+
+# 레이아웃
+app.layout = html.Div([
+    dcc.Interval(id='interval-component', interval=60000, n_intervals=0),
+    html.Div(id='page-content', children=[html.P("Loading...")])
+], style={
+    'fontFamily': 'Malgun Gothic, sans-serif',
+    'padding': '20px',
+    'maxWidth': '1200px',
+    'margin': '0 auto',
+    'backgroundColor': '#f8f9fa'
+})
+
+
+@callback(Output('page-content', 'children'), Input('interval-component', 'n_intervals'))
+def render_dashboard(_):
+    """대시보드 렌더링"""
+    db = None
+    try:
+        db = DatabaseHelper()
+        df = get_etf_holdings_data(db)
+        spy_df = get_spy_benchmark_data(db)
+        monthly_sectors, monthly_stocks = get_monthly_trending_data(db)
+        
+        if df.empty:
+            return html.Div([
+                html.H2("ETF Holdings Dashboard"),
+                html.P("데이터가 없습니다. ETF holdings 수집 작업을 실행해주세요.", 
+                       style={'color': '#e74c3c', 'padding': '20px'})
+            ])
+        
+        latest_date = df['trade_date'].max()
+        last_updated = latest_date.strftime('%Y-%m-%d %H:%M:%S') if latest_date else 'N/A'
+        
+        # 기간별 트렌딩 계산
+        week1_sectors, week1_stocks, week1_detailed = compute_period_trending(df, 7)
+        week2_sectors, week2_stocks, week2_detailed = compute_period_trending(df, 14)
+        week4_sectors, week4_stocks, week4_detailed = compute_period_trending(df, 30)
+        
+        # 차트 생성
+        week1_chart = create_sector_vs_spy_chart(df, spy_df, 7, "1주간(5days) 섹터 성과 vs SPY 벤치마크")
+        week2_chart = create_sector_vs_spy_chart(df, spy_df, 14, "격주간(2주간) 섹터 성과 vs SPY 벤치마크")
+        week4_chart = create_sector_vs_spy_chart(df, spy_df, 30, "월간(4주) 섹터 성과 vs SPY 벤치마크")
+        benchmark_ts = get_benchmark_timeseries(db, days=60)
+        active_ts = get_active_holdings_timeseries(db, days=60, top_n=10)
+        benchmark_vs_active_chart = create_benchmark_vs_active_chart(benchmark_ts, active_ts)
+        
+        # 레이아웃 구성
+        layout = html.Div([
+            # 헤더
+            html.H2("ETF Holdings Dashboard", style={'marginBottom': '5px', 'color': '#2c3e50'}),
+            html.P(f"마지막 업데이트: {last_updated}", style={'color': '#7f8c8d', 'fontSize': '14px', 'marginBottom': '20px'}),
+            
+            # 트렌딩 방법론
+            html.Div([
+                html.H3("📊 트렌딩 방법론", style={'color': '#2980b9', 'marginBottom': '15px'}),
+                
+                html.Div([
+                    # 트렌딩 섹터란?
+                    html.Div([
+                        html.H4("트렌딩 섹터란?", style={'color': '#e74c3c', 'marginBottom': '10px'}),
+                        html.P("최근 평균 가격 변동률이 벤치 기간 동안 0% 이상이고 평균 수익률이 SPY 수익률보다 높을 때 해당 섹터를 트렌딩으로 분류합니다.", 
+                               style={'fontSize': '14px', 'lineHeight': '1.6'}),
+                        html.Ul([
+                            html.Li("1주 트렌딩 (1W): 지난 5거래일간 섹터 평균 변동률 > 0% AND 섹터 평균 변동률 > SPY 수익률"),
+                            html.Li("2주 트렌딩 (2W): 지난 10거래일간 섹터 평균 변동률 > 0% AND 섹터 평균 변동률 > SPY 수익률"),
+                            html.Li("4주 트렌딩 (4W): 지난 20거래일간 섹터 평균 변동률 > 0% AND 섹터 평균 변동률 > SPY 수익률"),
+                            html.Li("월별 트렌딩: 전월 전 섹터 평균 수익률 > 0% AND 섹터 평균 수익률 > SPY 수익률")
+                        ], style={'paddingLeft': '20px', 'fontSize': '13px'})
+                    ], style={'width': '48%', 'backgroundColor': '#fff5f5', 'padding': '15px', 'borderRadius': '8px'}),
+                    
+                    # 트렌딩 종목이란?
+                    html.Div([
+                        html.H4("트렌딩 종목이란?", style={'color': '#e74c3c', 'marginBottom': '10px'}),
+                        html.P("다음 조건을 모두 만족할 때 종목을 트렌딩으로 표시합니다:", 
+                               style={'fontSize': '14px', 'lineHeight': '1.6'}),
+                        html.Ul([
+                            html.Li("트렌딩 섹터에 속함 (평균 변동률 > 0% AND 섹터 평균 변동률 > SPY 수익률)"),
+                            html.Li("해당 기간 종목의 평균 수익률 > 해당 섹터의 평균 수익률 (1위)")
+                        ], style={'paddingLeft': '20px', 'fontSize': '13px'}),
+                        html.P("트렌딩 종목은 트렌딩 섹터에서 최고 성과를 내는 주요 종목입니다.", 
+                               style={'fontSize': '13px', 'color': '#16a085', 'marginTop': '10px', 'fontStyle': 'italic'})
+                    ], style={'width': '48%', 'backgroundColor': '#f0f8ff', 'padding': '15px', 'borderRadius': '8px'}),
+                ], style={'display': 'flex', 'gap': '20px', 'marginBottom': '20px'}),
+                
+                # 트렌딩 탐색기
+                html.Div([
+                    html.H4("🔍 트렌딩 탐색기", style={'color': '#27ae60', 'marginBottom': '10px'}),
+                    html.P("트렌딩 섹터 = 평균 수익률 > 0% AND 평균 수익률 > SPY 수익률", style={'fontSize': '13px'}),
+                    html.P("트렌딩 종목 = 종목 수익률 > 해당 섹터 평균 (해당 섹터 트렌딩 베스트 기업)", 
+                           style={'fontSize': '13px', 'color': '#c0392b'})
+                ], style={'backgroundColor': '#e8f8f5', 'padding': '15px', 'borderRadius': '8px', 'marginBottom': '20px'})
+            ], style={'marginBottom': '30px'}),
+            
+            # 1주간 트렌딩 표시
+            create_period_section("1주간(5days) 섹터 상위 정보", week1_sectors, week1_stocks, "#e8f7ef", "지난 5거래일간"),
+            
+            # 1주간 차트 및 상세
+            html.Div([
+                html.H3("📈 1주간(5days) 섹터 성과 분석", style={'color': '#2c3e50', 'marginBottom': '15px'}),
+                dcc.Graph(figure=week1_chart),
+                html.Div([
+                    html.H4("트렌딩 섹터별 상위 5개 종목", style={'color': '#27ae60', 'marginBottom': '10px'}),
+                    create_detailed_stocks_table(week1_detailed) if not week1_detailed.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+                ], style={'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px', 'marginTop': '15px'})
+            ], style={'backgroundColor': '#e8f7ef', 'padding': '20px', 'borderRadius': '10px', 'marginBottom': '20px'}),
+            
+            # 격주간(2주간) 성과
+            create_period_section("격주간(2주간) 성과 (지난 10거래일)", week2_sectors, week2_stocks, "#e9f2fb", "지난 10거래일간"),
+            
+            # 2주간 차트 및 상세
+            html.Div([
+                html.H3("📈 격주간(2주간) 섹터 성과 분석", style={'color': '#2c3e50', 'marginBottom': '15px'}),
+                dcc.Graph(figure=week2_chart),
+                html.Div([
+                    html.H4("트렌딩 섹터별 상위 5개 종목", style={'color': '#27ae60', 'marginBottom': '10px'}),
+                    create_detailed_stocks_table(week2_detailed) if not week2_detailed.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+                ], style={'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px', 'marginTop': '15px'})
+            ], style={'backgroundColor': '#e9f2fb', 'padding': '20px', 'borderRadius': '10px', 'marginBottom': '20px'}),
+            
+            # 월간(4주) 성과
+            create_period_section("월간(4주) 성과 (지난 20거래일)", week4_sectors, week4_stocks, "#f3eafe", "지난 20거래일간"),
+            
+            # 4주간 차트 및 상세
+            html.Div([
+                html.H3("📈 월간(4주) 섹터 성과 분석", style={'color': '#2c3e50', 'marginBottom': '15px'}),
+                dcc.Graph(figure=week4_chart),
+                html.Div([
+                    html.H4("트렌딩 섹터별 상위 5개 종목", style={'color': '#27ae60', 'marginBottom': '10px'}),
+                    create_detailed_stocks_table(week4_detailed) if not week4_detailed.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+                ], style={'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px', 'marginTop': '15px'})
+            ], style={'backgroundColor': '#f3eafe', 'padding': '20px', 'borderRadius': '10px', 'marginBottom': '20px'}),
+            
+            # 월별 트렌딩 종목
+            html.Div([
+                html.H3("📅 월별 트렌딩 종목", style={'color': '#2980b9', 'marginBottom': '15px'}),
+                
+                html.Div([
+                    html.H4("월별 상위 트렌딩 종목", style={'marginBottom': '10px'}),
+                    create_monthly_table(monthly_stocks) if monthly_stocks else html.P("데이터 없음 (MTD/HTD 기준)", style={'color': '#7f8c8d'})
+                ], style={'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px', 'marginBottom': '15px'}),
+                
+                html.Div([
+                    html.H4("Active ETF (월간 Top 10, 동일 비중)", style={'marginBottom': '10px'}),
+                    create_active_etf_table(compute_mtd_top10_equal_weight(db))
+                ], style={'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px'})
+            ], style={'marginTop': '20px'}),
+
+            # 벤치마크 vs Active Holdings 시계열
+            html.Div([
+                html.H3("📈 Benchmark vs Active Holdings (시계열)", style={'color': '#2c3e50', 'marginBottom': '15px'}),
+                dcc.Graph(figure=benchmark_vs_active_chart),
+                html.P("검은색 라인: Active Holdings, 컬러 라인: 벤치마크 ETFs",
+                       style={'color': '#7f8c8d', 'fontSize': '13px'})
+            ], style={'backgroundColor': '#ffffff', 'padding': '20px', 'borderRadius': '10px', 'marginTop': '20px'})
+        ])
+        
+        return layout
+        
+    except Exception as e:
+        logger.error(f"대시보드 오류: {e}", exc_info=True)
+        return html.Div([
+            html.H2("오류 발생"),
+            html.P(f"데이터 조회 실패: {str(e)}", style={'color': '#e74c3c', 'padding': '20px'})
+        ])
+    finally:
+        if db:
+            try:
+                db.disconnect()
+            except Exception:
+                pass
+
+
+def create_period_section(title: str, sector_df: pd.DataFrame, stock_df: pd.DataFrame, bg_color: str, period_desc: str):
+    """기간별 트렌딩 섹션 생성"""
+    return html.Div([
+        html.H3(title, style={'color': '#2c3e50', 'marginBottom': '15px', 'borderLeft': '4px solid #3498db', 'paddingLeft': '10px'}),
+        
+        html.Div([
+            # 트렌딩 섹터
+            html.Div([
+                html.H4("트렌딩 섹터", style={'marginBottom': '10px', 'color': '#27ae60'}),
+                create_sector_table(sector_df) if not sector_df.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+            ], style={'width': '48%', 'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px'}),
+            
+            # 트렌딩 종목 (각 섹터 1위)
+            html.Div([
+                html.H4("트렌딩 종목 (각 섹터 1위)", style={'marginBottom': '10px', 'color': '#e74c3c'}),
+                create_stock_table(stock_df) if not stock_df.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+            ], style={'width': '48%', 'backgroundColor': '#fff', 'padding': '15px', 'borderRadius': '8px'})
+        ], style={'display': 'flex', 'gap': '20px'})
+    ], style={'backgroundColor': bg_color, 'padding': '20px', 'borderRadius': '10px', 'marginBottom': '20px'})
+
+
+def create_detailed_stocks_table(df: pd.DataFrame):
+    """섹터별 상위 5개 종목 테이블 생성"""
+    if df.empty:
+        return html.P("데이터 없음")
+    
+    # 섹터별로 그룹화
+    sectors = df['sector'].unique()
+    tables = []
+    
+    for sector in sectors:
+        sector_stocks = df[df['sector'] == sector].head(5)
+        rows = []
+        
+        for idx, row in sector_stocks.iterrows():
+            cum_return = row.get('cum_return', 0)
+            rank_style = {'backgroundColor': '#fff3cd'} if idx == 0 else {}
+            rows.append(html.Tr([
+                html.Td(row['ticker'], style={'padding': '8px', 'fontWeight': 'bold', **rank_style}),
+                html.Td(row.get('company_name', row['ticker']), style={'padding': '8px', **rank_style}),
+                html.Td(f"{cum_return:+.2f}%", style={'padding': '8px', 'fontWeight': 'bold', 
+                        'color': 'green' if cum_return >= 0 else 'red', **rank_style})
+            ]))
+        
+        table = html.Div([
+            html.H5(f"📊 {sector}", style={'color': '#2c3e50', 'marginBottom': '8px', 'backgroundColor': '#f0f0f0', 'padding': '8px', 'borderRadius': '4px'}),
+            html.Table([
+                html.Tr([
+                    html.Th("티커", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white', 'textAlign': 'left', 'width': '20%'}),
+                    html.Th("종목명", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white', 'width': '50%'}),
+                    html.Th("누적 수익률", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white', 'width': '30%'})
+                ])
+            ] + rows, style={'width': '100%', 'borderCollapse': 'collapse', 'border': '1px solid #ddd', 'marginBottom': '15px'})
+        ])
+        tables.append(table)
+    
+    return html.Div(tables)
+
+
+def create_detailed_section(title: str, sector_df: pd.DataFrame, bg_color: str):
+    """상세 정보 섹션"""
+    return html.Div([
+        html.H4(title, style={'color': '#2c3e50', 'marginBottom': '10px'}),
+        create_sector_table(sector_df) if not sector_df.empty else html.P("데이터 없음", style={'color': '#7f8c8d'})
+    ], style={'backgroundColor': bg_color, 'padding': '15px', 'borderRadius': '8px', 'marginBottom': '20px'})
+
+
+def create_sector_table(df: pd.DataFrame):
+    """섹터 테이블 생성"""
+    if df.empty:
+        return html.P("데이터 없음")
+    
+    rows = []
+    for _, row in df.iterrows():
+        cum_return = row.get('cum_return', 0)
+        rows.append(html.Tr([
+            html.Td(row['sector'], style={'padding': '8px'}),
+            html.Td(f"{cum_return:+.2f}%", style={'padding': '8px', 'fontWeight': 'bold', 
+                    'color': 'green' if cum_return >= 0 else 'red'}),
+            html.Td(str(row.get('stock_count', '-')), style={'padding': '8px', 'textAlign': 'center'})
+        ]))
+    
+    return html.Table([
+        html.Tr([
+            html.Th("섹터", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white', 'textAlign': 'left'}),
+            html.Th("누적 수익률", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white'}),
+            html.Th("종목 수", style={'padding': '10px', 'backgroundColor': '#34495e', 'color': 'white'})
+        ])
+    ] + rows, style={'width': '100%', 'borderCollapse': 'collapse', 'border': '1px solid #ddd'})
+
+
+def create_stock_table(df: pd.DataFrame):
+    """종목 테이블 생성"""
+    if df.empty:
+        return html.P("데이터 없음")
+    
+    rows = []
+    for _, row in df.iterrows():
+        cum_return = row.get('cum_return', 0)
+        rows.append(html.Tr([
+            html.Td(row['ticker'], style={'padding': '8px', 'fontWeight': 'bold'}),
+            html.Td(row.get('company_name', row['ticker']), style={'padding': '8px'}),
+            html.Td(row['sector'], style={'padding': '8px', 'fontSize': '12px', 'color': '#7f8c8d'}),
+            html.Td(f"{cum_return:+.2f}%", style={'padding': '8px', 'fontWeight': 'bold', 
+                    'color': 'green' if cum_return >= 0 else 'red'})
+        ]))
+    
+    return html.Table([
+        html.Tr([
+            html.Th("티커", style={'padding': '10px', 'backgroundColor': '#c0392b', 'color': 'white', 'textAlign': 'left'}),
+            html.Th("종목명", style={'padding': '10px', 'backgroundColor': '#c0392b', 'color': 'white'}),
+            html.Th("섹터", style={'padding': '10px', 'backgroundColor': '#c0392b', 'color': 'white'}),
+            html.Th("누적 수익률", style={'padding': '10px', 'backgroundColor': '#c0392b', 'color': 'white'})
+        ])
+    ] + rows, style={'width': '100%', 'borderCollapse': 'collapse', 'border': '1px solid #ddd'})
+
+
+def create_monthly_table(data):
+    """월별 트렌딩 테이블"""
+    if not data:
+        return html.P("데이터 없음")
+    
+    rows = []
+    for row in data[:10]:
+        avg_return = row.get('avg_monthly_return', 0) or 0
+        rows.append(html.Tr([
+            html.Td(f"{row.get('year', '')}-{row.get('month', ''):02d}", style={'padding': '8px'}),
+            html.Td(row.get('ticker', ''), style={'padding': '8px', 'fontWeight': 'bold'}),
+            html.Td(row.get('company_name', ''), style={'padding': '8px'}),
+            html.Td(row.get('sector', ''), style={'padding': '8px', 'fontSize': '12px'}),
+            html.Td(f"{avg_return:+.2f}%", style={'padding': '8px', 'fontWeight': 'bold',
+                    'color': 'green' if avg_return >= 0 else 'red'})
+        ]))
+    
+    return html.Table([
+        html.Tr([
+            html.Th("연월", style={'padding': '10px', 'backgroundColor': '#8e44ad', 'color': 'white'}),
+            html.Th("티커", style={'padding': '10px', 'backgroundColor': '#8e44ad', 'color': 'white'}),
+            html.Th("종목명", style={'padding': '10px', 'backgroundColor': '#8e44ad', 'color': 'white'}),
+            html.Th("섹터", style={'padding': '10px', 'backgroundColor': '#8e44ad', 'color': 'white'}),
+            html.Th("월간 수익률", style={'padding': '10px', 'backgroundColor': '#8e44ad', 'color': 'white'})
+        ])
+    ] + rows, style={'width': '100%', 'borderCollapse': 'collapse', 'border': '1px solid #ddd'})
+
+
+def compute_mtd_top10_equal_weight(db: DatabaseHelper, use_history_fallback: bool = True):
+    """월 시작부터 오늘까지의 상위 10 종목 (동일 비중) 계산. 필요 시 전체 기간으로 폴백."""
+    try:
+        # Month start
+        month_start_rows = db.fetch_all(
+            "SELECT DATE_TRUNC('month', MAX(trade_date))::DATE AS month_start FROM stock_daily_history"
+        )
+        if not month_start_rows or not month_start_rows[0].get('month_start'):
+            return []
+        month_start = month_start_rows[0].get('month_start')
+
+        # Compute per-ticker average change MTD using window function
+        mtd_rows = db.fetch_all(
+            """
+            WITH month_start_cte AS (
+                SELECT DATE_TRUNC('month', MAX(trade_date))::DATE AS month_start 
+                FROM stock_daily_history
+            )
+            SELECT ticker, company_name, sector, AVG(price_change_percent) AS avg_change
+            FROM stock_daily_history, month_start_cte
+            WHERE trade_date >= month_start_cte.month_start 
+              AND ticker != 'SPY' 
+              AND sector != 'Benchmark'
+            GROUP BY ticker, company_name, sector
+            ORDER BY AVG(price_change_percent) DESC
+            LIMIT 10
+            """
+        )
+        if mtd_rows:
+            return mtd_rows
+
+        if not use_history_fallback:
+            return []
+
+        # Fallback: history to date top 10
+        htd_rows = db.fetch_all(
+            """
+            SELECT ticker, company_name, sector, AVG(price_change_percent) AS avg_change
+            FROM stock_daily_history
+            WHERE ticker != 'SPY' AND sector != 'Benchmark'
+            GROUP BY ticker, company_name, sector
+            ORDER BY AVG(price_change_percent) DESC
+            LIMIT 10
+            """
+        )
+        return htd_rows or []
+    except Exception as e:
+        logger.error(f"Active ETF Top10 계산 실패: {e}", exc_info=True)
+        return []
+
+
+def create_active_etf_table(data):
+    """Active ETF (월간 Top 10, 동일 비중) 테이블 렌더링"""
+    if not data:
+        return html.P("데이터 없음", style={'color': '#7f8c8d'})
+
+    rows = []
+    for row in data:
+        avg_change = float(row.get('avg_change') or 0)
+        rows.append(html.Tr([
+            html.Td(row.get('ticker', ''), style={'padding': '8px', 'fontWeight': 'bold'}),
+            html.Td(row.get('company_name', ''), style={'padding': '8px'}),
+            html.Td(row.get('sector', ''), style={'padding': '8px', 'fontSize': '12px'}),
+            html.Td(f"{avg_change:+.2f}%", style={'padding': '8px', 'fontWeight': 'bold', 'color': 'green' if avg_change >= 0 else 'red'})
+        ]))
+
+    return html.Table([
+        html.Tr([
+            html.Th("티커", style={'padding': '10px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
+            html.Th("종목명", style={'padding': '10px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
+            html.Th("섹터", style={'padding': '10px', 'backgroundColor': '#2c3e50', 'color': 'white'}),
+            html.Th("월간 평균", style={'padding': '10px', 'backgroundColor': '#2c3e50', 'color': 'white'})
+        ])
+    ] + rows, style={'width': '100%', 'borderCollapse': 'collapse', 'border': '1px solid #ddd'})
+
+
+if __name__ == '__main__':
+    app.run_server(
+        host='0.0.0.0',
+        port=8050,
+        debug=False,
+        dev_tools_ui=False
+    )

@@ -1,0 +1,18 @@
+# Airflow dependencies
+apache-airflow-providers-postgres==5.9.0
+apache-airflow-providers-http==4.7.0
+
+# Data processing
+pandas==2.1.0
+numpy==1.25.2
+yfinance==0.2.54
+
+# Kafka
+kafka-python==2.0.2
+
+# Database
+psycopg2-binary==2.9.7
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
