@@ -117,7 +117,7 @@ def run_portfolio_allocator_spark(**context):
                 "--driver-memory", "2g",
                 "--executor-memory", "2g",
                 "--packages", "org.postgresql:postgresql:42.6.0",
-                "/opt/spark-apps/batch/spark_active_stock_allocator.py"
+                "/opt/spark-apps/batch/spark_02_active_stock_allocator.py"
             ],
             check=True,
             capture_output=True,
@@ -219,7 +219,7 @@ dag = DAG(
     default_args=default_args,
     description='Daily portfolio allocation analysis (after all data collections)',
     schedule_interval='0 13 * * 1-5',  # 13:00 UTC, weekdays only (after 12:00 holdings collection)
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['analytics', 'portfolio', 'spark', 'scheduled'],
 )

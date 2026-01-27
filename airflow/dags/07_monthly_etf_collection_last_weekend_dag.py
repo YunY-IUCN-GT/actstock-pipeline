@@ -178,7 +178,7 @@ def run_monthly_top_holdings_analysis(**context):
                 "--driver-memory", "2g",
                 "--executor-memory", "2g",
                 "--packages", "org.postgresql:postgresql:42.6.0",
-                "/opt/spark-apps/batch/spark_etf_top_holdings.py"
+                "/opt/spark-apps/batch/spark_03_etf_top_holdings.py"
             ],
             check=True,
             capture_output=True,
@@ -241,7 +241,7 @@ with DAG(
     default_args=default_args,
     description='Monthly ETF collection on last weekend (Sat/Sun) - Avoids weekdays',
     schedule_interval='0 8 * * 6',  # Every Saturday at 8 AM UTC (will check if it's last weekend)
-    start_date=days_ago(1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['monthly', 'etf', 'all-groups', 'weekend-only'],
 ) as dag:

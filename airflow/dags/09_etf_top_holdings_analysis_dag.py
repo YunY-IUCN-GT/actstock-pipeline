@@ -96,7 +96,7 @@ def run_spark_top_holdings_job(**context):
         "--driver-memory", "2g",
         "--executor-memory", "2g",
         "--packages", "org.postgresql:postgresql:42.6.0",
-        "/opt/spark-apps/batch/spark_etf_top_holdings.py"
+        "/opt/spark-apps/batch/spark_03_etf_top_holdings.py"
     ]
     
     try:
@@ -181,7 +181,7 @@ with DAG(
     default_args=default_args,
     description='Calculate top 5 ETF holdings by performance (5/10/20 day windows)',
     schedule_interval='0 20 * * *',  # Daily at 8 PM UTC (after market close)
-    start_date=days_ago(1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['analytics', 'etf', 'holdings', 'spark'],
 ) as dag:

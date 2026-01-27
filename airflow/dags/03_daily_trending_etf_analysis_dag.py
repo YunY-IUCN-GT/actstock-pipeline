@@ -95,7 +95,7 @@ def run_trending_etf_spark(**context):
                 "--master", "local[2]",
                 "--driver-memory", "1g",
                 "--packages", "org.postgresql:postgresql:42.6.0",
-                "/opt/spark-apps/batch/spark_trending_etf_identifier.py"
+                "/opt/spark-apps/batch/spark_01_trending_etf_identifier.py"
             ],
             check=True,
             capture_output=True,
@@ -187,7 +187,7 @@ dag = DAG(
     default_args=default_args,
     description='Identify trending ETFs (outperforming SPY) for conditional holdings collection',
     schedule_interval='0 11 * * 1-5',  # 11:00 UTC, weekdays only
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['analytics', 'trending', 'etf', 'spark', 'scheduled'],
 )

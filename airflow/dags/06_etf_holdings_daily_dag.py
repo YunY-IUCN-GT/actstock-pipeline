@@ -225,7 +225,7 @@ dag = DAG(
     default_args=default_args,
     description='ETF holdings daily close price collection',
     schedule_interval='0 18 * * 1-5',
-    start_date=days_ago(1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['etf-holdings', 'daily'],
 )

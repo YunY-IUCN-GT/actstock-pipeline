@@ -65,7 +65,7 @@ with DAG(
     default_args=default_args,
     description='매월 마지막 일요일 포트폴리오 리밸런싱 (5d/10d/20d 통합)',
     schedule_interval='0 14 * * 0',  # 매주 일요일 14:00 UTC (23:00 KST) - 실제로는 마지막 일요일만 실행
-    start_date=days_ago(1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['monthly', 'portfolio', 'spark', 'rebalance'],
     max_active_runs=1,
@@ -81,7 +81,7 @@ with DAG(
     # Task 2: Spark 월간 포트폴리오 리밸런싱
     spark_monthly_rebalance = SparkSubmitOperator(
         task_id='spark_monthly_portfolio_rebalance',
-        application='/opt/spark-apps/batch/spark_monthly_portfolio_rebalancer.py',
+        application='/opt/spark-apps/batch/spark_04_monthly_portfolio_rebalancer.py',
         conn_id='spark_default',
         conf={
             'spark.master': 'spark://spark-master:7077',

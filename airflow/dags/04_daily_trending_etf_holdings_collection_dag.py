@@ -79,7 +79,7 @@ def run_holdings_collection(**context):
     
     try:
         result = subprocess.run(
-            ["python3", "/opt/airflow/project/collector/kafka_producer_trending_etf_holdings.py"],
+            ["python3", "/opt/airflow/project/collector/kafka_03_producer_trending_etf_holdings.py"],
             check=True,
             capture_output=True,
             text=True,
@@ -173,7 +173,7 @@ dag = DAG(
     default_args=default_args,
     description='Collect holdings + stock data for trending ETFs only (conditional)',
     schedule_interval='0 12 * * 1-5',  # 12:00 UTC, weekdays only
-    start_date=datetime(2024, 1, 1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['collection', 'holdings', 'conditional', 'trending', 'scheduled'],
 )

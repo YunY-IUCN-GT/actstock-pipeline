@@ -260,7 +260,7 @@ services:
     networks:
       - actstock-network
     working_dir: /opt/app
-    command: python consumer/kafka_consumer_etf_daily.py
+    command: python consumer/kafka_01_consumer_etf_daily.py
     restart: unless-stopped
 
   # Kafka Consumer - ETF Holdings Data
@@ -290,7 +290,7 @@ services:
     networks:
       - actstock-network
     working_dir: /opt/app
-    command: python consumer/kafka_consumer_etf_holdings.py
+    command: python consumer/kafka_02_consumer_etf_holdings.py
     restart: unless-stopped
 
   # Kafka Consumer - Stock Daily Data
@@ -320,7 +320,7 @@ services:
     networks:
       - actstock-network
     working_dir: /opt/app
-    command: python consumer/kafka_consumer_stock_daily.py
+    command: python consumer/kafka_03_consumer_stock_daily.py
     restart: unless-stopped
 
 volumes:

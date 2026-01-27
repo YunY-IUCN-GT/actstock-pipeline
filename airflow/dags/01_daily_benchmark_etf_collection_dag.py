@@ -49,7 +49,7 @@ def collect_benchmark_etf_data(**context):
     Collect daily OHLC data for benchmark ETFs via Kafka
     Kafka Pipeline: Producer → etf-daily-data topic → Consumer → PostgreSQL
     """
-    from collector.kafka_producer_etf_daily import ETFDailyDataProducer
+    from collector.kafka_01_producer_etf_daily import ETFDailyDataProducer
     
     logger.info("Starting benchmark ETF data collection (Group 1) via Kafka")
     logger.info("Using Kafka pipeline: Producer → etf-daily-data → Consumer → PostgreSQL")
@@ -88,7 +88,7 @@ with DAG(
     default_args=default_args,
     description='Daily collection of benchmark ETF data (Group 1) - Weekdays only',
     schedule_interval='0 9 * * 1-5',  # 9 AM UTC, Monday-Friday
-    start_date=days_ago(1),
+    start_date=datetime(2026, 1, 26),
     catchup=False,
     tags=['daily', 'etf', 'benchmark', 'group1', 'weekday-only'],
 ) as dag:
