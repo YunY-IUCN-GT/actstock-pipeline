@@ -52,9 +52,10 @@ test_docker_containers() {
         "actstock-kafka"
         "actstock-zookeeper"
         "actstock-spark-master"
-        "actstock-consumer-trend"
-        "actstock-consumer-hourly"
-        "actstock-consumer-active"
+        "actstock-spark-worker"
+        "actstock-consumer-etf-daily"
+        "actstock-consumer-etf-holdings"
+        "actstock-consumer-stock-daily"
     )
     
     ALL_HEALTHY=true
@@ -93,9 +94,9 @@ test_database_connection() {
     log_info "Testing PostgreSQL connection..."
     
     # Main DB 테스트
-    docker compose exec -T postgres psql -U actstock_user -d actstock_db -c "SELECT version();" > /dev/null 2>&1
+    docker compose exec -T postgres psql -U postgres -d stockdb -c "SELECT version();" > /dev/null 2>&1
     if [ $? -eq 0 ]; then
-        log_success "Main DB (actstock_db) connection OK"
+        log_success "Main DB (stockdb) connection OK"
     else
         log_error "Main DB connection FAILED"
         return 1
@@ -195,7 +196,7 @@ test_database_tables() {
     log_info "Checking database tables..."
     
     # ETF 테이블 확인
-    ETF_COUNT=$(docker compose exec -T postgres psql -U actstock_user -d actstock_db -t -c "SELECT COUNT(*) FROM collected_daily_etf_ohlc;" 2>/dev/null | tr -d ' ')
+    ETF_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM collected_daily_etf_ohlc;" 2>/dev/null | tr -d ' ')
     if [ -n "$ETF_COUNT" ]; then
         log_success "collected_daily_etf_ohlc: $ETF_COUNT rows"
     else
@@ -203,7 +204,7 @@ test_database_tables() {
     fi
     
     # Holdings 테이블 확인
-    HOLDINGS_COUNT=$(docker compose exec -T postgres psql -U actstock_user -d actstock_db -t -c "SELECT COUNT(*) FROM etf_holdings;" 2>/dev/null | tr -d ' ')
+    HOLDINGS_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM etf_holdings;" 2>/dev/null | tr -d ' ')
     if [ -n "$HOLDINGS_COUNT" ]; then
         log_success "etf_holdings: $HOLDINGS_COUNT rows"
     else
