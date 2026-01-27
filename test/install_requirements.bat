@@ -23,10 +23,14 @@ if "%CONDA_DEFAULT_ENV%"=="" (
 echo Installing required packages...
 echo.
 
+REM Uninstall and reinstall to fix binary compatibility issues
+pip uninstall -y numpy pandas
+pip install --no-cache-dir numpy==1.25.2
+pip install --no-cache-dir pandas==2.1.0
+
 REM Install core dependencies
 pip install psycopg2-binary==2.9.7
 pip install yfinance==0.2.54
-pip install pandas==2.1.0
 pip install python-dotenv==1.0.0
 
 echo.
