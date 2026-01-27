@@ -21,30 +21,32 @@ async def get_sectors():
     """Get latest sector information (11 sectors)"""
     db = DatabaseHelper()
     
-    etf_query = """
-        SELECT DISTINCT ON (m.ticker)
-            m.ticker,
-            m.sector_name,
-            o.trade_date,
-            o.price_change_percent
-        FROM etf_daily_ohlc o
-        JOIN etf_metadata m ON m.ticker = o.ticker
-        WHERE m.etf_type = 'sector'
-        ORDER BY m.ticker, o.trade_date DESC
-    """
+    try:
+        etf_query = """
+            SELECT DISTINCT ON (m.ticker)
+                m.ticker,
+                m.sector_name,
+                o.trade_date,
+                0::numeric AS price_change_percent
+            FROM "01_collected_daily_etf_ohlc" o
+            JOIN "00_collected_meta_etf" m ON m.ticker = o.ticker
+            WHERE m.etf_type = 'sector'
+            ORDER BY m.ticker, o.trade_date DESC
+        """
 
-    results = db.fetch_all(etf_query)
+        results = db.fetch_all(etf_query)
 
-    if not results:
+        if not results:
+            return []
+
+        count_query = """
+            SELECT sector, COUNT(*) AS stock_count
+            FROM "06_collected_daily_stock_history"
+            GROUP BY sector
+        """
+        count_results = db.fetch_all(count_query)
+    except Exception:
         return []
-
-    count_query = """
-        SELECT sector, COUNT(*) AS stock_count
-        FROM stock_daily_history
-        WHERE trade_date = (SELECT MAX(trade_date) FROM stock_daily_history)
-        GROUP BY sector
-    """
-    count_results = db.fetch_all(count_query)
     counts_by_sector = {row["sector"]: row["stock_count"] for row in count_results}
 
     response = []

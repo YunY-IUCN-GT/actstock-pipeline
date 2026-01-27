@@ -797,20 +797,17 @@ def update_monthly_comparison(n):
     
     # 테이블 생성
     table_rows = []
-    
+
     for i, item in enumerate(comparison_data, 1):
         prev_ret = item['prev_return']
         curr_ret = item['current_return']
         change = item['change']
         category = item['category']
-        
+
         # 카테고리에 따라 배경색 결정
-        if category == '벤치마크':
-            bg_color = '#fff3cd'  # 연한 노란색
-        else:
-            bg_color = 'white'
-        
-        # 변화량에 따라 색상 결정
+        bg_color = '#fff3cd' if category == '벤치마크' else 'white'
+
+        # 변화량에 따라 색상/아이콘 결정
         if change > 0:
             change_color = '#27ae60'
             change_icon = "📈"
@@ -820,9 +817,9 @@ def update_monthly_comparison(n):
         else:
             change_color = '#95a5a6'
             change_icon = "—"
-        
+
         table_rows.append(html.Tr([
-            html.Td(str(i), style={'padding': '12px', 'textAlign': 'center', 
+            html.Td(str(i), style={'padding': '12px', 'textAlign': 'center',
                                   'fontWeight': 'bold', 'fontSize': '15px',
                                   'backgroundColor': bg_color}),
             html.Td(category, style={'padding': '12px', 'fontSize': '13px',
@@ -831,7 +828,7 @@ def update_monthly_comparison(n):
                                     'backgroundColor': bg_color}),
             html.Td(item['name'], style={'padding': '12px', 'fontWeight': 'bold',
                                         'backgroundColor': bg_color}),
-            html.Td(item['etf'], style={'padding': '12px', 'textAlign': 'center', 
+            html.Td(item['etf'], style={'padding': '12px', 'textAlign': 'center',
                                        'color': '#3498db', 'fontWeight': 'bold',
                                        'backgroundColor': bg_color}),
             html.Td(f"{prev_ret:+.2f}%", style={
@@ -852,56 +849,32 @@ def update_monthly_comparison(n):
                 'backgroundColor': bg_color
             })
         ]))
-    
+
     table = dbc.Table([
         html.Thead(html.Tr([
-            html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white', 
+            html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                  'textAlign': 'center', 'padding': '12px'}),
-            html.Th("구분", style={'backgroundColor': '#9b59b6', 'color': 'white', 
+            html.Th("섹터", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                  'padding': '12px'}),
-            html.Th("섹터/벤치마크", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                 'padding': '12px'}),
-            html.Td(item['etf'], style={'padding': '12px', 'textAlign': 'center', 
-                                       'color': '#3498db', 'fontWeight': 'bold'}),
-            html.Td(f"{prev_ret:+.2f}%", style={
-                'padding': '12px', 'textAlign': 'right',
-                'color': '#95a5a6', 'fontSize': '14px'
-            }),
-            html.Td(f"{curr_ret:+.2f}%", style={
-                'padding': '12px', 'textAlign': 'right',
-                'fontWeight': 'bold', 'fontSize': '15px',
-                'color': '#27ae60' if curr_ret >= 0 else '#e74c3c'
-            }),
-            html.Td(f"{change_icon} {change:+.2f}%", style={
-                'padding': '12px', 'textAlign': 'right',
-                'fontWeight': 'bold', 'fontSize': '16px',
-                'color': change_color
-            })
-        ]))
-    
-    table = dbc.Table([
-        html.Thead(html.Tr([
-            html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                 'textAlign': 'center', 'padding': '12px'}),
-            html.Th("섹터", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                 'padding': '12px'}),
-            html.Th("ETF", style={'backgroundColor': '#9b59b6', 'color': 'white', 
+            html.Th("ETF", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                 'textAlign': 'center', 'padding': '12px'}),
-            html.Th("이전 월 (20일)", style={'backgroundColor': '#9b59b6', 
+            html.Th("이전 월 (20일)", style={'backgroundColor': '#9b59b6',
                                           'color': 'white', 'padding': '12px'}),
-            html.Th("현재 월 (20일)", style={'backgroundColor': '#9b59b6', 
+            html.Th("현재 월 (20일)", style={'backgroundColor': '#9b59b6',
                                           'color': 'white', 'padding': '12px'}),
-            html.Th("변화량", style={'backgroundColor': '#9b59b6', 'color': 'white', 
+            html.Th("변화량", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                   'padding': '12px'}),
         ])),
         html.Tbody(table_rows)
     ], bordered=True, hover=True, striped=True, className="mb-3")
-    
-    footer = html.P(f"💡 이전 월: {prev_month_start.strftime('%Y-%m-%d')} ~ {prev_month_end.strftime('%Y-%m-%d')} | "
-                   f"현재 월: {current_month_start.strftime('%Y-%m-%d')} ~ {current_month_end.strftime('%Y-%m-%d')}", 
-                   className="text-muted text-center mt-2",
-                   style={'fontSize': '13px', 'fontStyle': 'italic'})
-    
+
+    footer = html.P(
+        f"💡 이전 월: {prev_month_start.strftime('%Y-%m-%d')} ~ {prev_month_end.strftime('%Y-%m-%d')} | "
+        f"현재 월: {current_month_start.strftime('%Y-%m-%d')} ~ {current_month_end.strftime('%Y-%m-%d')}",
+        className="text-muted text-center mt-2",
+        style={'fontSize': '13px', 'fontStyle': 'italic'}
+    )
+
     return html.Div([table, footer])
 
 

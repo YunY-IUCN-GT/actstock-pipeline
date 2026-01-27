@@ -17,6 +17,12 @@ from api.models.schemas import StockLatest, StockHistory, SectorInfo
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
 
+@router.get("/")
+async def list_stocks():
+    """Placeholder list endpoint to keep API contract stable for health checks."""
+    return []
+
+
 @router.get("/{symbol}/latest", response_model=StockLatest)
 async def get_latest_stock(symbol: str):
     """Get latest daily stock data (batch collected only)"""
