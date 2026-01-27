@@ -8,7 +8,7 @@ echo ========================================
 echo.
 
 REM 기본값 설정
-set DAYS=365
+set DAYS=20
 set DELAY=5
 
 REM 인자 처리

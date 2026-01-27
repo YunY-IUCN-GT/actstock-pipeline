@@ -103,8 +103,8 @@ def fetch_and_insert_etf(symbol: str, days: int, delay: int = 5):
 
 def main():
     parser = argparse.ArgumentParser(description='섹터 ETF 시간차 백필')
-    parser.add_argument('--days', type=int, default=365,
-                       help='수집할 과거 거래일 수 (기본값: 365)')
+    parser.add_argument('--days', type=int, default=20,
+                       help='수집할 과거 거래일 수 (기본값: 20)')
     parser.add_argument('--delay', type=int, default=5,
                        help='각 ETF 수집 후 대기 시간(초) (기본값: 5)')
     parser.add_argument('--batch', type=int,

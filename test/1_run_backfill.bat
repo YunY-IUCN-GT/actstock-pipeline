@@ -7,8 +7,8 @@ echo ETF Benchmark Data Backfill
 echo ========================================
 echo.
 
-REM Default: 1년 데이터 수집
-set DAYS=365
+REM Default: 20일 데이터 수집
+set DAYS=20
 
 REM 인자가 있으면 사용
 if not "%1"=="" set DAYS=%1

@@ -194,8 +194,8 @@ def insert_to_database(data: list):
 
 def main():
     parser = argparse.ArgumentParser(description='ETF 벤치마크 데이터 백필')
-    parser.add_argument('--days', type=int, default=365, 
-                       help='수집할 과거 거래일 수 (기본값: 365)')
+    parser.add_argument('--days', type=int, default=20, 
+                       help='수집할 과거 거래일 수 (기본값: 20)')
     parser.add_argument('--symbols', type=str, 
                        help='특정 심볼만 수집 (쉼표로 구분, 예: SPY,QQQ)')
     
