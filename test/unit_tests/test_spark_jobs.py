@@ -124,10 +124,10 @@ class TestActiveStockAllocator:
         assert result[2]["holding_ticker"] == "NVDA"
 
     def test_active_allocation_upsert_sql(self):
-        """Validate SQL statement for 05_analytics_portfolio_allocation upsert."""
+        """Validate SQL statement for analytics_05_portfolio_allocation upsert."""
         
         sql = """
-        INSERT INTO 05_analytics_portfolio_allocation (
+        INSERT INTO analytics_05_portfolio_allocation (
             as_of_date, window_days, benchmark_ticker, benchmark_return,
             etf_ticker, etf_return, holding_ticker, holding_name, holding_return
         ) VALUES (
@@ -143,7 +143,7 @@ class TestActiveStockAllocator:
         """
         
         # Validate SQL contains required keywords
-        assert "INSERT INTO 05_analytics_portfolio_allocation" in sql
+        assert "INSERT INTO analytics_05_portfolio_allocation" in sql
         assert "ON CONFLICT" in sql
         assert "DO UPDATE SET" in sql
         assert "as_of_date" in sql

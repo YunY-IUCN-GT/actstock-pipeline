@@ -1,0 +1,314 @@
+26/01/28 16:51:43 INFO SparkContext: Running Spark version 3.5.0
+26/01/28 16:51:43 INFO SparkContext: OS info Linux, 5.15.153.1-microsoft-standard-WSL2, amd64
+26/01/28 16:51:43 INFO SparkContext: Java version 11.0.20.1
+26/01/28 16:51:44 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+26/01/28 16:51:44 INFO ResourceUtils: ==============================================================
+26/01/28 16:51:44 INFO ResourceUtils: No custom resources configured for spark.driver.
+26/01/28 16:51:44 INFO ResourceUtils: ==============================================================
+26/01/28 16:51:44 INFO SparkContext: Submitted application: Active-Stock-Portfolio-Allocator
+26/01/28 16:51:44 INFO ResourceProfile: Default ResourceProfile created, executor resources: Map(cores -> name: cores, amount: 1, script: , vendor: , memory -> name: memory, amount: 1024, script: , vendor: , offHeap -> name: offHeap, amount: 0, script: , vendor: ), task resources: Map(cpus -> name: cpus, amount: 1.0)
+26/01/28 16:51:44 INFO ResourceProfile: Limiting resource is cpu
+26/01/28 16:51:44 INFO ResourceProfileManager: Added ResourceProfile id: 0
+26/01/28 16:51:44 INFO SecurityManager: Changing view acls to: spark
+26/01/28 16:51:44 INFO SecurityManager: Changing modify acls to: spark
+26/01/28 16:51:44 INFO SecurityManager: Changing view acls groups to: 
+26/01/28 16:51:44 INFO SecurityManager: Changing modify acls groups to: 
+26/01/28 16:51:44 INFO SecurityManager: SecurityManager: authentication disabled; ui acls disabled; users with view permissions: spark; groups with view permissions: EMPTY; users with modify permissions: spark; groups with modify permissions: EMPTY
+26/01/28 16:51:44 INFO Utils: Successfully started service 'sparkDriver' on port 42911.
+26/01/28 16:51:44 INFO SparkEnv: Registering MapOutputTracker
+26/01/28 16:51:44 INFO SparkEnv: Registering BlockManagerMaster
+26/01/28 16:51:44 INFO BlockManagerMasterEndpoint: Using org.apache.spark.storage.DefaultTopologyMapper for getting topology information
+26/01/28 16:51:44 INFO BlockManagerMasterEndpoint: BlockManagerMasterEndpoint up
+26/01/28 16:51:44 INFO SparkEnv: Registering BlockManagerMasterHeartbeat
+26/01/28 16:51:44 INFO DiskBlockManager: Created local directory at /tmp/blockmgr-9b88009f-59d8-440e-92b7-100d2ee76c1b
+26/01/28 16:51:44 INFO MemoryStore: MemoryStore started with capacity 434.4 MiB
+26/01/28 16:51:44 INFO SparkEnv: Registering OutputCommitCoordinator
+26/01/28 16:51:44 INFO JettyUtils: Start Jetty 0.0.0.0:4040 for SparkUI
+26/01/28 16:51:45 INFO Utils: Successfully started service 'SparkUI' on port 4040.
+26/01/28 16:51:45 INFO SparkContext: Added JAR /opt/spark/jars/postgresql-42.6.0.jar at spark://e8b74194982f:42911/jars/postgresql-42.6.0.jar with timestamp 1769619103920
+26/01/28 16:51:45 INFO Executor: Starting executor ID driver on host e8b74194982f
+26/01/28 16:51:45 INFO Executor: OS info Linux, 5.15.153.1-microsoft-standard-WSL2, amd64
+26/01/28 16:51:45 INFO Executor: Java version 11.0.20.1
+26/01/28 16:51:45 INFO Executor: Starting executor with user classpath (userClassPathFirst = false): ''
+26/01/28 16:51:45 INFO Executor: Created or updated repl class loader org.apache.spark.util.MutableURLClassLoader@6ff78446 for default.
+26/01/28 16:51:45 INFO Executor: Fetching spark://e8b74194982f:42911/jars/postgresql-42.6.0.jar with timestamp 1769619103920
+26/01/28 16:51:45 INFO TransportClientFactory: Successfully created connection to e8b74194982f/172.18.0.5:42911 after 31 ms (0 ms spent in bootstraps)
+26/01/28 16:51:45 INFO Utils: Fetching spark://e8b74194982f:42911/jars/postgresql-42.6.0.jar to /tmp/spark-6a4b4f2e-608f-454b-acf5-291b29e9c841/userFiles-d85d938d-5627-41f8-bea9-a7af6cd9dc51/fetchFileTemp17318337684226818393.tmp
+26/01/28 16:51:45 INFO Executor: Adding file:/tmp/spark-6a4b4f2e-608f-454b-acf5-291b29e9c841/userFiles-d85d938d-5627-41f8-bea9-a7af6cd9dc51/postgresql-42.6.0.jar to class loader default
+26/01/28 16:51:45 INFO Utils: Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 42437.
+26/01/28 16:51:45 INFO NettyBlockTransferService: Server created on e8b74194982f:42437
+26/01/28 16:51:45 INFO BlockManager: Using org.apache.spark.storage.RandomBlockReplicationPolicy for block replication policy
+26/01/28 16:51:45 INFO BlockManagerMaster: Registering BlockManager BlockManagerId(driver, e8b74194982f, 42437, None)
+26/01/28 16:51:45 INFO BlockManagerMasterEndpoint: Registering block manager e8b74194982f:42437 with 434.4 MiB RAM, BlockManagerId(driver, e8b74194982f, 42437, None)
+26/01/28 16:51:45 INFO BlockManagerMaster: Registered BlockManager BlockManagerId(driver, e8b74194982f, 42437, None)
+26/01/28 16:51:45 INFO BlockManager: Initialized BlockManager: BlockManagerId(driver, e8b74194982f, 42437, None)
+2026-01-28 16:51:45,720 - __main__ - INFO - Active Stock Allocator initialized
+2026-01-28 16:51:45,720 - __main__ - INFO - Active Stock Allocator initialized
+2026-01-28 16:51:45,720 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:45,720 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:45,720 - __main__ - INFO - Active Stock Portfolio Allocator - Stage 5
+2026-01-28 16:51:45,720 - __main__ - INFO - Active Stock Portfolio Allocator - Stage 5
+2026-01-28 16:51:45,720 - __main__ - INFO - Analysis Date: 2026-01-28
+2026-01-28 16:51:45,720 - __main__ - INFO - Analysis Date: 2026-01-28
+2026-01-28 16:51:45,721 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:45,721 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:45,721 - __main__ - INFO - Loading trending ETFs from Stage 3...
+2026-01-28 16:51:45,721 - __main__ - INFO - Loading trending ETFs from Stage 3...
+2026-01-28 16:51:50,676 - __main__ - INFO - Loaded 5 trending ETFs for 2026-01-28
+2026-01-28 16:51:50,676 - __main__ - INFO - Loaded 5 trending ETFs for 2026-01-28
+2026-01-28 16:51:51,042 - __main__ - INFO - Found 5 trending ETFs
+2026-01-28 16:51:51,042 - __main__ - INFO - Found 5 trending ETFs
+2026-01-28 16:51:51,043 - __main__ - INFO - Loading ETF holdings from Stage 4...
+2026-01-28 16:51:51,043 - __main__ - INFO - Loading ETF holdings from Stage 4...
+2026-01-28 16:51:51,241 - __main__ - INFO - Loaded 80 holdings records
+2026-01-28 16:51:51,241 - __main__ - INFO - Loaded 80 holdings records
+2026-01-28 16:51:51,241 - __main__ - INFO - Loading stock data...
+2026-01-28 16:51:51,241 - __main__ - INFO - Loading stock data...
+2026-01-28 16:51:51,453 - __main__ - INFO - Loaded stock data: 306 records for 20-day period
+2026-01-28 16:51:51,453 - __main__ - INFO - Loaded stock data: 306 records for 20-day period
+2026-01-28 16:51:51,454 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:51:51,454 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:51:51,454 - __main__ - INFO - Building 5-day Portfolio
+2026-01-28 16:51:51,454 - __main__ - INFO - Building 5-day Portfolio
+2026-01-28 16:51:51,454 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:51:51,454 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:51:53,360 - __main__ - INFO - Calculated 5-day returns for 17 tickers
+2026-01-28 16:51:53,360 - __main__ - INFO - Calculated 5-day returns for 17 tickers
+2026-01-28 16:51:53,381 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:53,381 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:53,381 - __main__ - INFO - Building 5-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:51:53,381 - __main__ - INFO - Building 5-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:51:53,381 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:53,381 - __main__ - INFO - ======================================================================
+2026-01-28 16:51:53,702 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:51:53,702 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:51:53,946 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:51:53,946 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:51:55,319 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:51:55,319 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:51:56,707 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:51:56,707 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:51:57,839 - __main__ - INFO - 5-day Portfolio Summary:
+2026-01-28 16:51:57,839 - __main__ - INFO - 5-day Portfolio Summary:
+2026-01-28 16:51:58,620 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:51:58,620 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:51:58,621 - __main__ - INFO - Top 5 allocations:
+2026-01-28 16:51:58,621 - __main__ - INFO - Top 5 allocations:
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:58 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:51:59 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:51:59,708 - __main__ - INFO -   STOCK5 (from XLB): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,708 - __main__ - INFO -   STOCK5 (from XLB): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,709 - __main__ - INFO -   STOCK5 (from XLC): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,709 - __main__ - INFO -   STOCK5 (from XLC): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,709 - __main__ - INFO -   STOCK5 (from XLU): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,709 - __main__ - INFO -   STOCK5 (from XLU): weight=32.30%, return=6.48%, mcap=$16.84B (score=3.85e-10)
+2026-01-28 16:51:59,709 - __main__ - INFO -   META (from QQQ): weight=2.22%, return=7.45%, mcap=$281.47B (score=2.65e-11)
+2026-01-28 16:51:59,709 - __main__ - INFO -   META (from QQQ): weight=2.22%, return=7.45%, mcap=$281.47B (score=2.65e-11)
+2026-01-28 16:51:59,709 - __main__ - INFO -   ORCL (from XLK): weight=0.88%, return=5.05%, mcap=$479.13B (score=1.05e-11)
+2026-01-28 16:51:59,709 - __main__ - INFO -   ORCL (from XLK): weight=0.88%, return=5.05%, mcap=$479.13B (score=1.05e-11)
+2026-01-28 16:52:00,579 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:00,579 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:00,580 - __main__ - INFO - Building 10-day Portfolio
+2026-01-28 16:52:00,580 - __main__ - INFO - Building 10-day Portfolio
+2026-01-28 16:52:00,580 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:00,580 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:01,048 - __main__ - INFO - Calculated 10-day returns for 17 tickers
+2026-01-28 16:52:01,048 - __main__ - INFO - Calculated 10-day returns for 17 tickers
+2026-01-28 16:52:01,064 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:01,064 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:01,064 - __main__ - INFO - Building 10-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:52:01,064 - __main__ - INFO - Building 10-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:52:01,064 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:01,064 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:01,310 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:52:01,310 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:52:01,445 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:52:01,445 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:52:01,951 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:52:01,951 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:52:02,663 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:52:02,663 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:52:03,280 - __main__ - INFO - 10-day Portfolio Summary:
+2026-01-28 16:52:03,280 - __main__ - INFO - 10-day Portfolio Summary:
+2026-01-28 16:52:03,801 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:52:03,801 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:52:03,801 - __main__ - INFO - Top 5 allocations:
+2026-01-28 16:52:03,801 - __main__ - INFO - Top 5 allocations:
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:03 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:04 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:52:04,559 - __main__ - INFO -   STOCK4 (from XLB): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,559 - __main__ - INFO -   STOCK4 (from XLB): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   STOCK4 (from XLC): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   STOCK4 (from XLC): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   STOCK4 (from XLU): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   STOCK4 (from XLU): weight=24.97%, return=13.01%, mcap=$17.76B (score=7.33e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   MSFT (from QQQ): weight=12.55%, return=14.95%, mcap=$40.59B (score=3.68e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   MSFT (from QQQ): weight=12.55%, return=14.95%, mcap=$40.59B (score=3.68e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   MSFT (from XLK): weight=12.55%, return=14.95%, mcap=$40.59B (score=3.68e-10)
+2026-01-28 16:52:04,560 - __main__ - INFO -   MSFT (from XLK): weight=12.55%, return=14.95%, mcap=$40.59B (score=3.68e-10)
+2026-01-28 16:52:05,201 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:05,201 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:05,201 - __main__ - INFO - Building 20-day Portfolio
+2026-01-28 16:52:05,201 - __main__ - INFO - Building 20-day Portfolio
+2026-01-28 16:52:05,201 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:05,201 - __main__ - INFO - ----------------------------------------------------------------------
+2026-01-28 16:52:05,593 - __main__ - INFO - Calculated 20-day returns for 17 tickers
+2026-01-28 16:52:05,593 - __main__ - INFO - Calculated 20-day returns for 17 tickers
+2026-01-28 16:52:05,610 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:05,610 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:05,611 - __main__ - INFO - Building 20-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:52:05,611 - __main__ - INFO - Building 20-day Portfolio Allocation for 2026-01-28
+2026-01-28 16:52:05,611 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:05,611 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:05,809 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:52:05,809 - __main__ - INFO - Trending ETFs: ['QQQ', 'XLK', 'XLC', 'XLU', 'XLB']
+2026-01-28 16:52:05,895 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:52:05,895 - __main__ - INFO - Holdings for trending ETFs: 25 records
+2026-01-28 16:52:06,356 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:52:06,356 - __main__ - INFO - Stocks with full data: 25 records
+2026-01-28 16:52:06,814 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:52:06,814 - __main__ - INFO - Selected best performer from each trending ETF: 5 stocks
+2026-01-28 16:52:07,396 - __main__ - INFO - 20-day Portfolio Summary:
+2026-01-28 16:52:07,396 - __main__ - INFO - 20-day Portfolio Summary:
+2026-01-28 16:52:07,820 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:52:07,820 - __main__ - INFO - Total weight: 100.00%
+2026-01-28 16:52:07,820 - __main__ - INFO - Top 5 allocations:
+2026-01-28 16:52:07,820 - __main__ - INFO - Top 5 allocations:
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:07 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:08 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLB): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLB): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLC): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLC): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLU): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   STOCK5 (from XLU): weight=32.71%, return=22.17%, mcap=$16.84B (score=1.32e-09)
+2026-01-28 16:52:08,461 - __main__ - INFO -   AAPL (from QQQ): weight=0.93%, return=17.74%, mcap=$474.53B (score=3.74e-11)
+2026-01-28 16:52:08,461 - __main__ - INFO -   AAPL (from QQQ): weight=0.93%, return=17.74%, mcap=$474.53B (score=3.74e-11)
+2026-01-28 16:52:08,462 - __main__ - INFO -   AAPL (from XLK): weight=0.93%, return=17.74%, mcap=$474.53B (score=3.74e-11)
+2026-01-28 16:52:08,462 - __main__ - INFO -   AAPL (from XLK): weight=0.93%, return=17.74%, mcap=$474.53B (score=3.74e-11)
+2026-01-28 16:52:08,887 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:08,887 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:08,887 - __main__ - INFO - Saving 3 portfolio allocations
+2026-01-28 16:52:08,887 - __main__ - INFO - Saving 3 portfolio allocations
+2026-01-28 16:52:08,887 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:08,887 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:09,390 - __main__ - INFO - Saving portfolio allocation to database...
+2026-01-28 16:52:09,390 - __main__ - INFO - Saving portfolio allocation to database...
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:09 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:52:10,041 - database.db_helper - INFO - 데이터베이스에 연결되었습니다.
+2026-01-28 16:52:10,071 - __main__ - INFO - Saved 5 portfolio allocations for 5d period
+2026-01-28 16:52:10,071 - __main__ - INFO - Saved 5 portfolio allocations for 5d period
+2026-01-28 16:52:10,549 - __main__ - INFO - Saving portfolio allocation to database...
+2026-01-28 16:52:10,549 - __main__ - INFO - Saving portfolio allocation to database...
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:10 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:52:11,017 - __main__ - INFO - Saved 5 portfolio allocations for 10d period
+2026-01-28 16:52:11,017 - __main__ - INFO - Saved 5 portfolio allocations for 10d period
+2026-01-28 16:52:11,411 - __main__ - INFO - Saving portfolio allocation to database...
+2026-01-28 16:52:11,411 - __main__ - INFO - Saving portfolio allocation to database...
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+26/01/28 16:52:11 WARN WindowExec: No Partition Defined for Window operation! Moving all data to a single partition, this can cause serious performance degradation.
+2026-01-28 16:52:11,894 - __main__ - INFO - Saved 5 portfolio allocations for 20d period
+2026-01-28 16:52:11,894 - __main__ - INFO - Saved 5 portfolio allocations for 20d period
+2026-01-28 16:52:11,894 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:11,894 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:11,894 - __main__ - INFO - Portfolio Allocation Complete
+2026-01-28 16:52:11,894 - __main__ - INFO - Portfolio Allocation Complete
+2026-01-28 16:52:11,894 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:11,894 - __main__ - INFO - ======================================================================
+2026-01-28 16:52:12,094 - database.db_helper - INFO - 데이터베이스 연결이 종료되었습니다.
+2026-01-28 16:52:12,094 - __main__ - INFO - Resources closed
+2026-01-28 16:52:12,094 - __main__ - INFO - Resources closed
+2026-01-28 16:52:12,099 - __main__ - INFO - Resources closed
+2026-01-28 16:52:12,099 - __main__ - INFO - Resources closed

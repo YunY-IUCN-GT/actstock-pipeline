@@ -196,19 +196,19 @@ test_database_tables() {
     log_info "Checking database tables..."
     
     # ETF 테이블 확인
-    ETF_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM \"01_collected_daily_etf_ohlc\";" 2>/dev/null | tr -d ' ')
+    ETF_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM collected_01_daily_etf_ohlc;" 2>/dev/null | tr -d ' ')
     if [ -n "$ETF_COUNT" ]; then
-        log_success "01_collected_daily_etf_ohlc: $ETF_COUNT rows"
+        log_success "collected_01_daily_etf_ohlc: $ETF_COUNT rows"
     else
-        log_warning "01_collected_daily_etf_ohlc: Table may not exist or is empty"
+        log_warning "collected_01_daily_etf_ohlc: Table may not exist or is empty"
     fi
     
     # Holdings 테이블 확인
-    HOLDINGS_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM \"04_collected_etf_holdings\";" 2>/dev/null | tr -d ' ')
+    HOLDINGS_COUNT=$(docker compose exec -T postgres psql -U postgres -d stockdb -t -c "SELECT COUNT(*) FROM collected_04_etf_holdings;" 2>/dev/null | tr -d ' ')
     if [ -n "$HOLDINGS_COUNT" ]; then
-        log_success "04_collected_etf_holdings: $HOLDINGS_COUNT rows"
+        log_success "collected_04_etf_holdings: $HOLDINGS_COUNT rows"
     else
-        log_warning "04_collected_etf_holdings: Table may not exist or is empty"
+        log_warning "collected_04_etf_holdings: Table may not exist or is empty"
     fi
     
     return 0

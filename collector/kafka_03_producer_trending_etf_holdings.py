@@ -65,11 +65,12 @@ class TrendingETFHoldingsProducer:
         """
         try:
             query = """
-                SELECT ticker, etf_type, sector_name, return_pct, spy_return
-                FROM "03_analytics_trending_etfs"
-                WHERE as_of_date = CURRENT_DATE
-                  AND is_trending = TRUE
-                ORDER BY return_pct DESC
+                SELECT t.etf_ticker as ticker, m.etf_type, m.sector_name, t.return_pct
+                FROM analytics_03_trending_etfs t
+                LEFT JOIN collected_00_meta_etf m ON t.etf_ticker = m.ticker
+                WHERE t.as_of_date = CURRENT_DATE
+                  AND t.is_trending = TRUE
+                ORDER BY t.return_pct DESC
             """
             
             results = self.db.fetch_all(query)
@@ -81,11 +82,10 @@ class TrendingETFHoldingsProducer:
             LOG.info("=" * 70)
             LOG.info("Found %d trending ETFs:", len(results))
             for etf in results:
-                LOG.info("  %s (%s): %.2f%% (vs SPY: %.2f%%)",
+                LOG.info("  %s (%s): %.2f%%",
                         etf['ticker'],
                         etf['sector_name'] if etf['sector_name'] else 'Benchmark',
-                        etf['return_pct'],
-                        etf['spy_return'])
+                        etf['return_pct'])
             LOG.info("=" * 70)
             
             return results

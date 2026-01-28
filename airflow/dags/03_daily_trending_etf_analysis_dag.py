@@ -45,7 +45,7 @@ def check_etf_data_ready(**context):
         query = """
             SELECT COUNT(DISTINCT ticker) as etf_count,
                    MAX(trade_date) as latest_date
-            FROM 01_collected_daily_etf_ohlc
+            FROM collected_01_daily_etf_ohlc
             WHERE trade_date >= CURRENT_DATE - INTERVAL '2 days'
         """
         result = db.fetch_one(query)
@@ -64,7 +64,7 @@ def check_etf_data_ready(**context):
         # Check if we have SPY data (critical for trending analysis)
         spy_query = """
             SELECT COUNT(*) as spy_count
-            FROM 01_collected_daily_etf_ohlc
+            FROM collected_01_daily_etf_ohlc
             WHERE ticker = 'SPY'
               AND trade_date >= CURRENT_DATE - INTERVAL '25 days'
         """
@@ -127,7 +127,7 @@ def verify_trending_results(**context):
                 COUNT(*) as total_etfs,
                 SUM(CASE WHEN is_trending THEN 1 ELSE 0 END) as trending_count,
                 MAX(as_of_date) as latest_date
-            FROM 03_analytics_trending_etfs
+            FROM analytics_03_trending_etfs
             WHERE as_of_date = CURRENT_DATE
         """
         result = db.fetch_one(query)
@@ -149,22 +149,24 @@ def verify_trending_results(**context):
             logger.warning("No ETFs are trending today (all underperforming SPY or negative)")
         else:
             # Get list of trending ETFs
+            # Get list of trending ETFs
+            # Joins with metadata table to get context
             trending_query = """
-                SELECT ticker, etf_type, sector_name, return_pct, spy_return
-                FROM 03_analytics_trending_etfs
-                WHERE as_of_date = CURRENT_DATE
-                  AND is_trending = TRUE
-                ORDER BY return_pct DESC
+                SELECT t.etf_ticker as ticker, m.etf_type, m.sector_name, t.return_pct
+                FROM analytics_03_trending_etfs t
+                LEFT JOIN collected_00_meta_etf m ON t.etf_ticker = m.ticker
+                WHERE t.as_of_date = CURRENT_DATE
+                  AND t.is_trending = TRUE
+                ORDER BY t.return_pct DESC
             """
             trending_etfs = db.fetch_all(trending_query)
             
             logger.info("Trending ETFs:")
             for etf in trending_etfs:
-                logger.info("  %s (%s): %.2f%% (vs SPY: %.2f%%)",
+                logger.info("  %s (%s): %.2f%%",
                            etf['ticker'],
                            etf['sector_name'] if etf['sector_name'] else 'Benchmark',
-                           etf['return_pct'],
-                           etf['spy_return'])
+                           etf['return_pct'])
         
         logger.info("Trending ETF analysis verification passed")
         return True

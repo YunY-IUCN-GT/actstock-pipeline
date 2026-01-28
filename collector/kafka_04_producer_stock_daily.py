@@ -62,10 +62,10 @@ class StockDailyDataProducer:
         """
         try:
             query = """
-                SELECT DISTINCT ticker
-                FROM "04_collected_etf_holdings"
-                WHERE ticker IS NOT NULL
-                  AND ticker != ''
+                SELECT DISTINCT holding_ticker as ticker
+                FROM collected_04_etf_holdings
+                WHERE holding_ticker IS NOT NULL
+                  AND holding_ticker != ''
                 ORDER BY ticker
             """
             

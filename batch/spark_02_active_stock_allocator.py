@@ -73,14 +73,11 @@ class ActiveStockAllocator:
         query = f"""(
             SELECT 
                 etf_ticker,
-                return_20d,
-                spy_return_20d,
-                outperformance,
-                rank_by_outperformance
-            FROM "03_analytics_trending_etfs"
+                return_pct as return_20d
+            FROM analytics_03_trending_etfs
             WHERE as_of_date = '{as_of_date}'
               AND is_trending = TRUE
-            ORDER BY rank_by_outperformance
+            ORDER BY return_pct DESC
         ) as trending_etfs"""
         
         df = self.spark.read.jdbc(
@@ -114,9 +111,9 @@ class ActiveStockAllocator:
                 ticker,
                 trade_date,
                 close_price
-            FROM "01_collected_daily_etf_ohlc"
+            FROM collected_01_daily_etf_ohlc
             WHERE trade_date >= '{cutoff_date}'
-              AND ticker IN ('SPY', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC', 'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB')
+            AND ticker IN ('SPY', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC', 'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB')
             ORDER BY ticker, trade_date
         ) as etf_data"""
         
@@ -149,10 +146,10 @@ class ActiveStockAllocator:
                 trade_date,
                 close_price,
                 market_cap
-            FROM "06_collected_daily_stock_history"
+            FROM collected_06_daily_stock_history
             WHERE trade_date >= '{cutoff_date}'
-              AND sector IS NOT NULL
-              AND sector != 'Unknown'
+            AND sector IS NOT NULL
+            AND sector != 'Unknown'
             ORDER BY ticker, trade_date
         ) as stock_data"""
         
@@ -372,7 +369,7 @@ class ActiveStockAllocator:
         # Add stock metadata (sector, market cap)
         w_latest = Window.partitionBy("ticker").orderBy(F.col("trade_date").desc())
         stock_metadata = stock_data.withColumn("rn", F.row_number().over(w_latest)) \
-                                   .filter(F.col("rn") == 1) \
+                                   .filter((F.col("rn") == 1) & (F.col("market_cap") > 0)) \
                                    .select("ticker", "company_name", "sector", "market_cap")
         
         stocks_full = stocks_with_returns.join(stock_metadata, "ticker", "inner")
@@ -442,10 +439,12 @@ class ActiveStockAllocator:
         LOG.info("Total weight: %.2f%%", portfolio_final.agg(F.sum("weight")).first()[0])
         LOG.info("Top 5 allocations:")
         for row in portfolio_final.orderBy(F.col("weight").desc()).limit(5).collect():
+            mcap_val = (row["market_cap"] or 0) / 1e9
+            ret_val = row["return_pct"] or 0.0
+            score_val = row["allocation_score"] or 0.0
             LOG.info("  %s (from %s): weight=%.2f%%, return=%.2f%%, mcap=$%.2fB (score=%.2e)",
-                    row["ticker"], row["etf_ticker"], row["weight"], 
-                    row["return_pct"], row["market_cap"] / 1e9, 
-                    row["allocation_score"])
+                    row["ticker"], row["etf_ticker"], row["weight"] or 0.0, 
+                    ret_val, mcap_val, score_val)
         
         return portfolio_final
     
@@ -467,24 +466,24 @@ class ActiveStockAllocator:
             period_days = row['period_days']
             
             upsert_query = """
-                INSERT INTO "05_analytics_portfolio_allocation" (
+                INSERT INTO analytics_05_portfolio_allocation (
                     as_of_date, ticker, company_name, sector, market_cap,
-                    return_20d, portfolio_weight, 
-                    allocation_reason, rank_20d, period_days
+                    return_pct, rank, portfolio_weight, 
+                    allocation_reason, period_days
                 ) VALUES (
                     %(as_of_date)s, %(ticker)s, %(company_name)s, %(sector)s, %(market_cap)s,
-                    %(return_20d)s, %(portfolio_weight)s,
-                    %(allocation_reason)s, %(rank_20d)s, %(period_days)s
+                    %(return_pct)s, %(rank)s, %(portfolio_weight)s,
+                    %(allocation_reason)s, %(period_days)s
                 )
                 ON CONFLICT (as_of_date, ticker, period_days)
                 DO UPDATE SET
                     company_name = EXCLUDED.company_name,
                     sector = EXCLUDED.sector,
                     market_cap = EXCLUDED.market_cap,
-                    return_20d = EXCLUDED.return_20d,
+                    return_pct = EXCLUDED.return_pct,
+                    rank = EXCLUDED.rank,
                     portfolio_weight = EXCLUDED.portfolio_weight,
                     allocation_reason = EXCLUDED.allocation_reason,
-                    rank_20d = EXCLUDED.rank_20d,
                     created_at = NOW()
             """
             
@@ -494,10 +493,10 @@ class ActiveStockAllocator:
                 'company_name': row['company_name'],
                 'sector': row['sector'],
                 'market_cap': row['market_cap'],
-                'return_20d': row['return_pct'],  # Keep column name but use period-specific return
-                'portfolio_weight': row['weight'] / 100.0,  # Convert from percentage to decimal
+                'return_pct': row['return_pct'],
+                'rank': row['rank'],
+                'portfolio_weight': row['weight'] / 100.0,
                 'allocation_reason': row['allocation_reason'],
-                'rank_20d': row['rank'],  # Keep column name but use period-specific rank
                 'period_days': period_days
             }
             
@@ -627,8 +626,8 @@ class ActiveStockAllocator:
             holdings_query = f"""(
                 SELECT DISTINCT 
                     etf_ticker,
-                    ticker as holding_ticker
-                FROM "04_collected_etf_holdings"
+                    holding_ticker
+                FROM collected_04_etf_holdings
                 WHERE as_of_date >= '{as_of_date - timedelta(days=30)}'
             ) as holdings"""
             
@@ -642,7 +641,7 @@ class ActiveStockAllocator:
             
             # STEP 3: Load stock data (for metadata: sector, market cap)
             LOG.info("Loading stock data...")
-            stock_data = self.load_stock_data(period_days=20)  # Load sufficient history
+            stock_data = self.load_stock_data(days=20)  # Load sufficient history
             
             # STEP 4: Build portfolios for each period (5d, 10d, 20d)
             periods = [5, 10, 20]

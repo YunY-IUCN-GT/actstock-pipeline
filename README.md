@@ -46,7 +46,7 @@ yfinance + Kafka + Spark + PostgreSQL + Airflow로 구성된 **스케줄 배치 
 3. **가중치 계산**: Weight = Performance × (1/Market Cap)
    - 고성과 + 소형주 = 높은 비중 (더 큰 수익 잠재력)
    - 정규화하여 총합 100%
-4. **결과 저장**: `analytics_portfolio_allocation` (period_days: 5, 10, 20)
+4. **결과 저장**: `analytics_05_portfolio_allocation` (period_days: 5, 10, 20)
 
 ---
 
@@ -76,25 +76,25 @@ http://localhost:8050
 5-Stage Pipeline (Mon-Fri, Starting 21:30 UTC via Controller):
 
 Stage 1 (Start) │ Benchmark ETF Collection
-      └─→ collected_daily_etf_ohlc
+      └─→ collected_01_daily_etf_ohlc
       ↓ (1 hour delay)
 Stage 2         │ Sector ETF Collection  
-      └─→ collected_daily_etf_ohlc
+      └─→ collected_01_daily_etf_ohlc
       ↓ (Immediate)
 Stage 3         │ Trending ETF Analysis (Spark)
-      └─→ Write: analytics_trending_etfs
+      └─→ Write: analytics_03_trending_etfs
       ↓ (1 hour delay)
 Stage 4         │ Conditional Holdings Collection
-      └─→ Write: collected_etf_holdings
+      └─→ Write: collected_04_etf_holdings, collected_06_daily_stock_history
       ↓ (Immediate)
 Stage 5         │ Multi-Period Portfolio Allocation (Spark)
-      └─→ Write: analytics_portfolio_allocation
+      └─→ Write: analytics_05_portfolio_allocation
 
 API/Dashboard:
-      └─→ Read: analytics_trending_etfs, analytics_portfolio_allocation
+      └─→ Read: analytics_03_trending_etfs, analytics_05_portfolio_allocation
 ```
 
-**📝 상세 스케줄**: [SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)
+<!-- 상세 스케줄 정보는 ARCHITECTURE.md를 참조하십시오. -->
 
 ---
 
@@ -103,16 +103,16 @@ API/Dashboard:
 ### Collected (수집 데이터)
 | 테이블 | 용도 | 업데이트 주기 |
 |--------|------|---------------|
-| `collected_daily_etf_ohlc` | 일별 ETF OHLC (17 ETFs) | Stage 1+2 (09:00, 10:00 UTC) |
-| `collected_etf_holdings` | ETF 보유종목 (조건부) | Stage 4 (12:00 UTC - 트렌딩만) |
-| `collected_daily_stock_history` | 일별 주식 OHLC (조건부) | Stage 4 (12:00 UTC - 트렌딩만) |
-| `collected_meta_etf` | ETF 메타데이터 (17 ETFs) | 정적 데이터 |
+| `collected_01_daily_etf_ohlc` | 일별 ETF OHLC (17 ETFs) | Stage 1+2 (09:00, 10:00 UTC) |
+| `collected_04_etf_holdings` | ETF 보유종목 (조건부) | Stage 4 (12:00 UTC - 트렌딩만) |
+| `collected_06_daily_stock_history` | 일별 주식 OHLC (조건부) | Stage 4 (12:00 UTC - 트렌딩만) |
+| `collected_00_meta_etf` | ETF 메타데이터 (17 ETFs) | 정적 데이터 |
 
 ### Analytics (분석 결과 - Spark 계산)
 | 테이블 | 용도 | 업데이트 주기 |
 |--------|------|---------------|
-| `analytics_trending_etfs` | 트렌딩 ETF 식별 (vs SPY) | 매일 11:00 UTC (Stage 3) |
-| `analytics_portfolio_allocation` | **멀티기간** 포트폴리오 배분 (5d/10d/20d) | 매일 13:00 UTC (Stage 5) |
+| `analytics_03_trending_etfs` | 트렌딩 ETF 식별 (vs SPY) | 매일 11:00 UTC (Stage 3) |
+| `analytics_05_portfolio_allocation` | **멀티기간** 포트폴리오 배분 (5d/10d/20d) | 매일 13:00 UTC (Stage 5) |
 
 ### Logs (로그)
 | 테이블 | 용도 | 업데이트 주기 |
@@ -121,22 +121,11 @@ API/Dashboard:
 
 ---
 
-## 📖 상세 문서
-
-### 시스템 아키텍처
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 완전한 시스템 아키텍처 및 5-Stage 파이프라인
-- **[SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)**: DAG 스케줄 전략 및 실행 시간
-- **[DAG_SCHEDULE_REFERENCE.md](DAG_SCHEDULE_REFERENCE.md)**: Active/Disabled DAG 빠른 참조
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**: 자주 사용하는 명령어 빠른 참조
-
-### 최신 기능
-- **[MULTI_PERIOD_IMPLEMENTATION.md](MULTI_PERIOD_IMPLEMENTATION.md)**: 멀티기간 포트폴리오 구현 상세
-- **[TESTING_MULTI_PERIOD.md](TESTING_MULTI_PERIOD.md)**: 멀티기간 기능 테스트 가이드
-- **[CLEANUP_SUMMARY.md](CLEANUP_SUMMARY.md)**: 문서/DB 정리 요약
-
-### 기타
+### 📖 상세 문서
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 전체 시스템 아키텍처 및 상세 데이터 플로우
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**: 자주 사용하는 명령어 퀵 레퍼런스
+- **[test/README.md](test/README.md)**: 테스트 및 백필 도구 가이드
 - **[database/NAMING_CONVENTION.md](database/NAMING_CONVENTION.md)**: 데이터베이스 명명 규칙
-- **[test/README.md](test/README.md)**: 테스트 및 백필 가이드
 
 ---
 
@@ -165,17 +154,17 @@ docker compose exec spark-master python /app/backfill_benchmarks.py
 
 ### 3단계: Airflow DAG 활성화
 ```bash
-# Airflow UI (http://localhost:8080)에서 5개 DAG 활성화:
-# 1. benchmark_data_daily_dag (09:00 UTC)
-# 2. benchmark_data_daily_dag (10:00 UTC - 섹터)
-# 3. monthly_sector_trending_dag (11:00 UTC - Spark)
-# 4. etf_holdings_daily_dag (12:00 UTC)
-# 5. (포트폴리오 배분 - 13:00 UTC - Spark)
+# Airflow UI (http://localhost:8080)에서 DAG 활성화:
+# 1. 01_daily_benchmark_etf_collection_dag (09:00 UTC)
+# 2. 02_daily_sector_etf_collection_dag (10:00 UTC)
+# 3. 03_daily_trending_etf_analysis_dag (11:00 UTC)
+# 4. 04_daily_trending_etf_holdings_collection_dag (12:00 UTC)
+# 5. 05_daily_portfolio_allocation_dag (13:00 UTC)
 
 # 수동 Spark 실행:
 docker compose exec spark-master spark-submit \
   --master spark://spark-master:7077 \
-  /opt/spark-apps/batch/spark_active_stock_allocator.py
+  /opt/spark-apps/batch/spark_02_active_stock_allocator.py
 ```
 
 ---
@@ -204,7 +193,7 @@ docker compose exec spark-master bash -c "\
   --driver-memory 2g \
   --executor-memory 2g \
   --packages org.postgresql:postgresql:42.6.0 \
-  batch/spark_active_stock_allocator.py"
+  batch/spark_02_active_stock_allocator.py"
 ```
 
 ### 데이터 검증
@@ -215,7 +204,7 @@ SELECT
     COUNT(*) as stock_count,
     MAX(as_of_date) as latest_date,
     ROUND(SUM(portfolio_weight) * 100, 2) as total_weight_pct
-FROM analytics_portfolio_allocation
+FROM analytics_05_portfolio_allocation
 GROUP BY period_days
 ORDER BY period_days;
 
@@ -225,11 +214,11 @@ SELECT
     ticker,
     company_name,
     ROUND(portfolio_weight * 100, 2) as weight_pct,
-    ROUND(return_20d, 2) as return_pct,
+    ROUND(return_pct, 2) as return_pct,
     market_cap,
     allocation_reason
-FROM analytics_portfolio_allocation
-WHERE as_of_date = (SELECT MAX(as_of_date) FROM analytics_portfolio_allocation)
+FROM analytics_05_portfolio_allocation
+WHERE as_of_date = (SELECT MAX(as_of_date) FROM analytics_05_portfolio_allocation)
   AND period_days = 20  -- 5, 10, 또는 20
 ORDER BY portfolio_weight DESC
 LIMIT 10;
@@ -237,13 +226,11 @@ LIMIT 10;
 -- 트렌딩 ETF 확인
 SELECT 
     etf_ticker,
-    ROUND(return_20d, 2) as etf_return,
-    ROUND(spy_return_20d, 2) as spy_return,
-    ROUND(outperformance, 2) as outperformance,
+    ROUND(return_pct, 2) as etf_return,
     is_trending
-FROM analytics_trending_etfs
-WHERE as_of_date = (SELECT MAX(as_of_date) FROM analytics_trending_etfs)
-ORDER BY outperformance DESC;
+FROM analytics_03_trending_etfs
+WHERE as_of_date = (SELECT MAX(as_of_date) FROM analytics_03_trending_etfs)
+ORDER BY return_pct DESC;
 ```
 
 ---
@@ -275,21 +262,10 @@ GET /dashboard/active-allocations?period_days=20
 ---
 
 ## 📚 문서
-
-> **📖 [전체 문서 목록 보기 (DOCS_INDEX.md)](DOCS_INDEX.md)** - 모든 문서의 완전한 가이드
-
-### 핵심 문서
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - 전체 시스템 아키텍처 및 데이터 플로우
-- **[database/NAMING_CONVENTION.md](database/NAMING_CONVENTION.md)** - 데이터베이스 명명 규칙
-
-### 시스템별 문서
-- **[ETF_TOP_HOLDINGS_SYSTEM.md](ETF_TOP_HOLDINGS_SYSTEM.md)** - ETF Top Holdings 동적 추적 시스템
-- **[SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)** - ETF 데이터 수집 스케줄링 (Rate-Limit 방지)
-
-### 운영 가이드
-- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - 시스템 테스트 및 검증 절차
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - 상세 시스템 아키텍처 및 데이터 플로우
 - **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - 자주 사용하는 명령어 모음
-- **[test/README.md](test/README.md)** - 백필 및 테스트 도구 가이드
+- **[test/README.md](test/README.md)** - 테스트 및 백필 도구 가이드
+- **[database/NAMING_CONVENTION.md](database/NAMING_CONVENTION.md)** - 데이터베이스 명명 규칙
 
 ---
 

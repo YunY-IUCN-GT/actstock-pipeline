@@ -14,95 +14,105 @@
 └────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
-              ┌──────────────────────────────────────────┐
-              │           Controller DAG                 │
-              │      Daily 21:30 UTC (Market Close)      │
-              └───────────────┬──────────────────────────┘
-                              │
-                              │ [Sequential Trigger]
-                              ▼
-  ┌──────────┐ (1h delay) ┌──────────┐ (Immediate)  ┌──────────┐ (1h delay)
-  │ Stage 1  │ ─────────► │ Stage 2  │ ──────────► │ Stage 3  │ ──────────► ...
-  │ Benchmark│            │  Sector  │             │ Trending │
-  └──────────┘            └──────────┘             └──────────┘
-       │                    │                     │
-   [DAG] daily_benchmark_etf_collection_dag.py    │
-   [Producer] kafka_producer_etf_daily.py         │
-   [Topic] etf-daily-data                         │
-   [Consumer] kafka_consumer_etf_daily.py         │
-       │                    │                     │
-       │    [DAG] daily_sector_etf_collection_dag.py
-       │    [Producer] kafka_producer_etf_daily.py
-       │    [Topic] etf-daily-data              [DAG] daily_trending_etf_holdings_collection_dag.py
-       │    [Consumer] kafka_consumer_etf_daily.py  [Producer] kafka_producer_trending_etf_holdings.py
-       │                    │                     [Topic] etf-holdings-data, stock-daily-data
-       │                    │                     [Consumer] kafka_consumer_etf_holdings.py
-       │                    │                     [Consumer] kafka_consumer_stock_daily.py
-       │                    │                     │
-       └────────────────────┴─────────────────────┘
-                            │
-                            ▼
-    ┌───────────────────────────────────────────────────────────────────┐
-    │               PostgreSQL (Collected Layer)                        │
-    │  • collected_daily_etf_ohlc          ← Stage 1, 2                 │
-    │  • collected_etf_holdings            ← Stage 4 (Trending only)    │
-    │  • collected_daily_stock_history     ← Stage 4 (Trending only)    │
-    │  • collected_meta_etf                ← Static metadata            │
-    └───────────────────────┬───────────────────────────────────────────┘
-                            │
-                 ┌──────────┴──────────┐
+               ┌──────────────────────────────────────────┐
+               │           Controller DAG                 │
+               │      매일 21:30 UTC (장 마감)            │
+               └───────────────┬──────────────────────────┘
+                               │
+                               │ [순차적 실행 트리거]
+                               ▼
+   ┌──────────┐ (1시간 지연) ┌──────────┐ (즉시 실행)  ┌──────────┐ (1시간 지연)
+   │ Stage 1  │ ──────────► │ Stage 2  │ ──────────► │ Stage 3  │ ──────────► ...
+   │ 벤치마크 │             │  섹터    │             │ 트렌딩   │
+   └──────────┘             └──────────┘             └──────────┘
+        │                    │                     │
+    [Stage 1]                │                     │
+    [DAG] 01_daily_benchmark_etf_collection_dag.py │
+    [Producer] kafka_01_producer_etf_daily.py      │
+    [Topic] etf-daily-data                         │
+    [Consumer] kafka_01_consumer_etf_daily.py      │
+        │                    │                     │
+        │             [Stage 2]                    │
+        │             [DAG] 02_daily_sector_etf_collection_dag.py
+        │             [Producer] kafka_01_producer_etf_daily.py
+        │             [Topic] etf-daily-data
+        │             [Consumer] kafka_01_consumer_etf_daily.py
+        │                    │                     │
+        │                    │              [Stage 4]
+        │                    │              [DAG] 04_daily_trending_etf_holdings_collection_dag.py
+        │                    │              [Producer] kafka_03_producer_trending_etf_holdings.py
+        │                    │              [Topic] etf-holdings-data, stock-daily-data
+        │                    │              [Consumer] kafka_02_consumer_etf_holdings.py
+        │                    │              [Consumer] kafka_03_consumer_stock_daily.py
+        │                    │                     │
+        └────────────────────┴─────────────────────┘
+                             │
+                             ▼
+     ┌───────────────────────────────────────────────────────────────────┐
+     │               PostgreSQL (수집 계층)                              │
+     │  • collected_01_daily_etf_ohlc       ← Stage 1, 2                 │
+     │  • collected_04_etf_holdings         ← Stage 4 (트렌딩 전용)       │
+     │  • collected_06_daily_stock_history  ← Stage 4 (트렌딩 전용)       │
+     │  • collected_00_meta_etf             ← 정적 메타데이터            │
+     └───────────────────────┬───────────────────────────────────────────┘
+                             │
+                  ┌──────────┴──────────┐
+                  │                     │
+                  ▼                     ▼
+           ┌───────────┐         ┌───────────┐
+           │  Stage 3  │         │  Stage 5  │
+           │ 11:00 UTC │         │ 13:00 UTC │
+           │ 트렌딩 ETF│         │ 포트폴리오│
+           │   분석    │         │(5d/10d/20d)│
+           │           │         │   배분    │
+           └─────┬─────┘         └─────┬─────┘
                  │                     │
-                 ▼                     ▼
-          ┌───────────┐         ┌───────────┐
-          │  Stage 3  │         │  Stage 5  │
-          │11:00 UTC  │         │13:00 UTC  │
-          │ Trending  │         │ Portfolio │
-          │   ETF     │         │(5d/10d/20d)│
-          │ Analysis  │         │Allocation │
-          └─────┬─────┘         └─────┬─────┘
-                │                     │
-       [DAG] daily_trending_etf_analysis_dag.py
-       [Spark] spark_trending_etf_identifier.py   [DAG] daily_portfolio_allocation_dag.py
-                │                     [Spark] spark_active_stock_allocator.py
-                │                     │
-                └─────────┬───────────┘
-                          ▼
-    ┌───────────────────────────────────────────────────────────────────┐
-    │            PostgreSQL (Analytics Layer)                           │
-    │  • analytics_trending_etfs           ← Stage 3 output             │
-    │  • analytics_portfolio_allocation    ← Stage 5 output             │
-    │    └─ period_days: 5, 10, 20         (3 portfolios per day)       │
-    └───────────────────────┬───────────────────────────────────────────┘
-                            │
-                            ├──────────────────────┐
-                            │                      │
-                            ▼                      ▼
-                    ┌───────────┐          ┌─────────────┐
-                    │  FastAPI  │          │   Monthly   │
-                    │Port: 8000 │          │  Rebalance  │
-                    │Multi-period│         │(Last Sunday)│
-                    └─────┬─────┘          │  14:00 UTC  │
-                          │                └──────┬──────┘
-                          │                       │
-                          │         [DAG] monthly_portfolio_rebalance_dag.py
-                          │         [Spark] spark_monthly_portfolio_rebalancer.py
-                          │         [Logic] Compare 5d/10d/20d → Score → Merge
-                          │                       │
-                          │                       ▼
-                          │         ┌────────────────────────────────────┐
-                          │         │ analytics_monthly_portfolio        │
-                          │         │ (Final portfolio for next 20 days) │
-                          │         └────────────────┬───────────────────┘
-                          │                          │
-                          └──────────────────────────┘
-                                     │
-                                     ▼
-                              ┌──────────────┐
-                              │  Dashboard   │
-                              │ Port: 8050   │
-                              │Period Selector│
-                              │5d/10d/20d/月 │
-                              └──────────────┘
+    [Stage 3]    │                     │
+    [DAG] 03_daily_trending_etf_analysis_dag.py
+    [Spark] spark_01_trending_etf_identifier.py
+                 │                     │
+                 │              [Stage 5]
+                 │              [DAG] 05_daily_portfolio_allocation_dag.py
+                 │              [Spark] spark_02_active_stock_allocator.py
+                 │                     │
+                 └─────────┬───────────┘
+                           ▼
+     ┌───────────────────────────────────────────────────────────────────┐
+     │            PostgreSQL (분석 계층)                                 │
+     │  • analytics_03_trending_etfs        ← Stage 3 결과물             │
+     │  • analytics_05_portfolio_allocation ← Stage 5 결과물             │
+     │    └─ period_days: 5, 10, 20         (일별 3개 포트폴리오)        │
+     └───────────────────────┬───────────────────────────────────────────┘
+                             │
+                             ├──────────────────────┐
+                             │                      │
+                             ▼                      ▼
+                     ┌───────────┐          ┌─────────────┐
+                     │  FastAPI  │          │    월간     │
+                     │ 포트: 8000│          │  리밸런싱   │
+                     │ 멀티 기간 │          │ (마지막 일요일)│
+                     │ 분석      │          │  14:00 UTC  │
+                     └─────┬─────┘          └──────┬──────┘
+                           │                       │
+                           │         [DAG] 08_monthly_portfolio_rebalance_dag.py
+                           │         [Spark] spark_04_monthly_portfolio_rebalancer.py
+                           │         [로직] 5일/10일/20일 비교 → 점수 산정 → 병합
+                           │                       │
+                           │                       ▼
+                           │         ┌────────────────────────────────────┐
+                           │         │ analytics_08_monthly_portfolio     │
+                           │         │ (차기 20일 최종 포트폴리오)        │
+                           │         └────────────────┬───────────────────┘
+                           │                          │
+                           └──────────────────────────┘
+                                      │
+                                      ▼
+                               ┌──────────────┐
+                               │  대시보드    │
+                               │ 포트: 8050   │
+                               │  기간 선택기 │
+                               │ 5일/10일/20일/월│
+                               └──────────────┘
 ```
 
 ### 데이터 수집 전략
@@ -136,24 +146,24 @@
               └─ Kafka: Airflow → Producer → etf-daily-data → Consumer → PostgreSQL
               
 11:00 UTC → Stage 3: 트렌딩 ETF 식별 (Spark)
-              ├─ Read: collected_daily_etf_ohlc
-              ├─ Logic: return_20d > SPY AND > 0%
-              └─ Write: analytics_trending_etfs
+              ├─ Read: collected_01_daily_etf_ohlc
+              ├─ Logic: return_pct > SPY_return AND > 0%
+              └─ Write: analytics_03_trending_etfs
               
 12:00 UTC → Stage 4: 조건부 Holdings 수집 (Kafka)
-              ├─ Read: analytics_trending_etfs (trending만 선택)
+              ├─ Read: analytics_03_trending_etfs (trending만 선택)
               ├─ Collect: 트렌딩 ETF의 top 5 holdings만
-              ├─ Write: collected_etf_holdings
-              └─ Write: collected_daily_stock_history
+              ├─ Write: collected_04_etf_holdings
+              └─ Write: collected_06_daily_stock_history
 
 13:00 UTC → Stage 5: 멀티기간 포트폴리오 배분 (Spark)
-              ├─ Read: analytics_trending_etfs, collected_etf_holdings
+              ├─ Read: analytics_03_trending_etfs, collected_04_etf_holdings
               ├─ Logic: TOP 1 performer per ETF, Weight = Perf × (1/MCap)
               ├─ Periods: 5d, 10d, 20d (3개 독립 포트폴리오)
-              └─ Write: analytics_portfolio_allocation
+              └─ Write: analytics_05_portfolio_allocation
 ```
 
-**📝 상세**: [SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)
+<!-- 상세 스케줄 정보는 본 문서의 '5-Stage Pipeline 상세' 섹션을 참조하십시오. -->
 
 ---
 
@@ -189,51 +199,50 @@ Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
 ### Stage 1 & 2: ETF OHLC 수집 (09:00, 10:00 UTC)
 
 #### Stage 1: 벤치마크 ETF (09:00 UTC)
-**DAG**: `daily_benchmark_etf_collection_dag.py`
+**DAG**: `01_daily_benchmark_etf_collection_dag.py`
 - **대상**: SPY, QQQ, IWM, EWY, DIA, SCHD (6개)
 - **실행**: 월-금 09:00 UTC (주 5회)
-- **방식**: Airflow → Kafka Producer (`kafka_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_consumer_etf_daily.py`) → PostgreSQL
+- **방식**: Airflow → Kafka Producer (`kafka_01_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_01_consumer_etf_daily.py`) → PostgreSQL
 - **Rate Limit**: 5초 간격
-- **저장**: `collected_daily_etf_ohlc`
+- **저장**: `collected_01_daily_etf_ohlc`
 
 #### Stage 2: 섹터 ETF (10:00 UTC)
-**DAG**: `daily_sector_etf_collection_dag.py`
+**DAG**: `02_daily_sector_etf_collection_dag.py`
 - **대상**: QQQ, XLV, XLF, XLY, XLC, XLI, XLP, XLU, XLRE, XLB (10개)
 - **섹터**: Technology, Healthcare, Financial, Consumer Cyclical, Communication, Industrial, Consumer Defensive, Utilities, Real Estate, Basic Materials
 - **실행**: 월-금 10:00 UTC (주 5회)
-- **방식**: Airflow → Kafka Producer (`kafka_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_consumer_etf_daily.py`) → PostgreSQL
+- **방식**: Airflow → Kafka Producer (`kafka_01_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_01_consumer_etf_daily.py`) → PostgreSQL
 - **Rate Limit**: 5초 간격
-- **저장**: `collected_daily_etf_ohlc`
+- **저장**: `collected_01_daily_etf_ohlc`
 - **Note**: QQQ는 Stage 1 벤치마크에도 포함되어 총 15개 unique ETF
 
 ### Stage 3: 트렌딩 ETF 분석 (11:00 UTC)
 
-**Spark Job**: `spark_trending_etf_identifier.py`
-- **입력**: `collected_daily_etf_ohlc` (Stage 1, 2 결과)
+**Spark Job**: `spark_01_trending_etf_identifier.py`
+- **입력**: `collected_01_daily_etf_ohlc` (Stage 1, 2 결과)
 - **로직**: 
   - 20일 수익률 계산
   - SPY 대비 outperformance
-  - is_trending = (return_20d > spy_return_20d) AND (return_20d > 0)
-- **출력**: `analytics_trending_etfs`
+  - is_trending = (return_pct > spy_return) AND (return_pct > 0)
+- **출력**: `analytics_03_trending_etfs`
 - **용도**: Stage 4에서 수집할 ETF 결정
 
 ### Stage 4: 조건부 Holdings 수집 (12:00 UTC)
 
-**DAG**: `daily_trending_etf_holdings_collection_dag.py`
-- **조건**: `analytics_trending_etfs`에서 `is_trending = TRUE`인 ETF만
+**DAG**: `04_daily_trending_etf_holdings_collection_dag.py`
+- **조건**: `analytics_03_trending_etfs`에서 `is_trending = TRUE`인 ETF만
 - **수집**: 각 trending ETF의 top 5 holdings
-- **방식**: Airflow → Kafka Producer (`kafka_producer_trending_etf_holdings.py`) → Topics: `etf-holdings-data`, `stock-daily-data` → Consumers → PostgreSQL
+- **방식**: Airflow → Kafka Producer (`kafka_03_producer_trending_etf_holdings.py`) → Topics: `etf-holdings-data`, `stock-daily-data` → Consumers → PostgreSQL
 - **저장**: 
-  - `collected_etf_holdings` (ETF-종목 매핑) via `kafka_consumer_etf_holdings.py`
-  - `collected_daily_stock_history` (종목 OHLC) via `kafka_consumer_stock_daily.py`
+  - `collected_04_etf_holdings` (ETF-종목 매핑) via `kafka_02_consumer_etf_holdings.py`
+  - `collected_06_daily_stock_history` (종목 OHLC) via `kafka_03_consumer_stock_daily.py`
 - **효율성**: 전체 수집 대비 ~97% API 호출 감소
 
 ### Stage 5: 포트폴리오 배분 (13:00 UTC)
 
-**Spark Job**: `spark_active_stock_allocator.py`
+**Spark Job**: `spark_02_active_stock_allocator.py`
 - **입력**: 
-**📝 상세 스케줄**: [SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)
-**📊 DAG 참조**: [DAG_SCHEDULE_REFERENCE.md](DAG_SCHEDULE_REFERENCE.md)
+<!-- 상세 스케줄 및 DAG 참조는 본 문서의 상단 아키텍처 다이어그램 및 상세 설명을 참조하십시오. -->
 
 ---
 
@@ -248,14 +257,14 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
 ### Spark Batch Jobs
 
 #### 1. Trending ETF Identifier (매일 11:00 UTC - Stage 3)
-**파일**: `batch/spark_trending_etf_identifier.py`  
-**트리거**: `airflow/dags/daily_trending_etf_analysis_dag.py`
+**파일**: `batch/spark_01_trending_etf_identifier.py`  
+**트리거**: `airflow/dags/03_daily_trending_etf_analysis_dag.py`
 
 **기능**: SPY 대비 outperforming ETF 식별
 
 **로직**:
 ```
-1. Load ETF OHLC data (collected_daily_etf_ohlc)
+1. Load ETF OHLC data (collected_01_daily_etf_ohlc)
    └─ Last 20 trading days
 
 2. Calculate returns for each period (5d, 10d, 20d)
@@ -267,21 +276,21 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
    └─ Condition: outperformance > 0 AND is_trending = TRUE
 
 4. Save results
-   └─ analytics_trending_etfs (etf_ticker, return_Xd, spy_return_Xd, outperformance, is_trending)
+   └─ analytics_03_trending_etfs (etf_ticker, return_Xd, spy_return_Xd, outperformance, is_trending)
 ```
 
 #### 2. Portfolio Allocator (매일 13:00 UTC - Stage 5)
-**파일**: `batch/spark_active_stock_allocator.py`  
-**트리거**: `airflow/dags/daily_portfolio_allocation_dag.py`
+**파일**: `batch/spark_02_active_stock_allocator.py`  
+**트리거**: `airflow/dags/05_daily_portfolio_allocation_dag.py`
 
 **기능**: 멀티 기간 포트폴리오 생성 (5일/10일/20일)
 
 **로직**:
 ```
 1. Load data
-   ├─ analytics_trending_etfs (Stage 3 output)
-   ├─ collected_etf_holdings (Stage 4 output)
-   └─ collected_daily_stock_history (Stage 4 output)
+   ├─ analytics_03_trending_etfs (Stage 3 output)
+   ├─ collected_04_etf_holdings (Stage 4 output)
+   └─ collected_06_daily_stock_history (Stage 4 output)
 
 2. For each period (5d, 10d, 20d):
    ├─ Filter trending ETFs for this period
@@ -292,19 +301,19 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
    └─ Assign allocation_reason
 
 3. Save results
-   └─ analytics_portfolio_allocation (3 portfolios with period_days: 5, 10, 20)
+   └─ analytics_05_portfolio_allocation (3 portfolios with period_days: 5, 10, 20)
 ```
 
 #### 3. Monthly Portfolio Rebalancer (매월 마지막 일요일 14:00 UTC)
-**파일**: `batch/spark_monthly_portfolio_rebalancer.py`  
-**트리거**: `airflow/dags/monthly_portfolio_rebalance_dag.py`
+**파일**: `batch/spark_04_monthly_portfolio_rebalancer.py`  
+**트리거**: `airflow/dags/08_monthly_portfolio_rebalance_dag.py`
 
 **기능**: 5일/10일/20일 포트폴리오 통합 → 최종 월간 포트폴리오
 
 **로직**:
 ```
 1. Load multi-period portfolios
-   └─ analytics_portfolio_allocation (period_days: 5, 10, 20)
+   └─ analytics_05_portfolio_allocation (period_days: 5, 10, 20)
 
 2. Compare and score
    ├─ 20일 base: score = 1.0
@@ -324,7 +333,7 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
    └─ Normalize to sum = 1.0 (100%)
 
 5. Save final monthly portfolio
-   └─ analytics_monthly_portfolio (rebalance_date, valid_until, final_rank, final_weight, score, source_periods)
+   └─ analytics_08_monthly_portfolio (rebalance_date, valid_until, final_rank, final_weight, score, source_periods)
 ```
 - 결과: `analytics_sector_trending`
 
@@ -338,7 +347,7 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
 
 ```sql
 -- 일별 주식 히스토리 (Stage 4, 월-금 12:00 UTC)
-collected_daily_stock_history (
+collected_06_daily_stock_history (
     ticker VARCHAR,
     trade_date DATE,
     close_price NUMERIC,
@@ -348,7 +357,7 @@ collected_daily_stock_history (
 )
 
 -- ETF 메타데이터 + 보유종목 (etf_holdings_daily_dag, 월-금 09:00 UTC)
-collected_meta_etf (
+collected_00_meta_etf (
     ticker VARCHAR PRIMARY KEY,
     etf_type VARCHAR,
     sector_name VARCHAR,
@@ -356,7 +365,7 @@ collected_meta_etf (
 )
 
 -- 일별 ETF OHLC
-collected_daily_etf_ohlc (
+collected_01_daily_etf_ohlc (
     ticker VARCHAR,
     trade_date DATE,
     open_price NUMERIC,
@@ -369,15 +378,15 @@ collected_daily_etf_ohlc (
 )
 
 -- ETF 보유종목
-collected_etf_holdings (
+collected_04_etf_holdings (
     etf_ticker VARCHAR,
-    stock_ticker VARCHAR,
-    stock_name VARCHAR,
+    holding_ticker VARCHAR,
+    holding_name VARCHAR,
     holding_percent NUMERIC,
     shares BIGINT,
     market_value BIGINT,
     collected_date DATE,
-    UNIQUE(etf_ticker, stock_ticker, collected_date)
+    UNIQUE(etf_ticker, holding_ticker, collected_date)
 )
 
 -- 벤치마크 보유종목
@@ -395,7 +404,7 @@ collected_monthly_benchmark_holdings (
 
 ```sql
 -- 포트폴리오 배분 (트렌딩 기반)
-analytics_portfolio_allocation (
+analytics_05_portfolio_allocation (
     as_of_date DATE,
     ticker VARCHAR,
     company_name VARCHAR,
@@ -438,28 +447,27 @@ analytics_etf_top_holdings (
 )
 
 -- 트렌딩 ETF (Stage 3 output)
-analytics_trending_etfs (
+analytics_03_trending_etfs (
     as_of_date DATE,
     etf_ticker VARCHAR,
-    return_20d NUMERIC,
-    spy_return_20d NUMERIC,
-    outperformance NUMERIC,
-    rank_by_outperformance INT,
+    period INT,
+    return_pct NUMERIC,
     is_trending BOOLEAN,
-    sector_name VARCHAR,
-    UNIQUE(as_of_date, etf_ticker)
+    UNIQUE(as_of_date, etf_ticker, period)
 )
 
 -- 포트폴리오 배분 (Stage 5 output - 멀티기간)
-analytics_portfolio_allocation (
+analytics_05_portfolio_allocation (
     as_of_date DATE,
     ticker VARCHAR,
     period_days INT,           -- 5, 10, 20 (멀티기간 지원)
     portfolio_weight NUMERIC,
-    return_20d NUMERIC,
+    return_pct NUMERIC,
+    sector_avg NUMERIC,
+    is_trending BOOLEAN,
+    rank INT,
     market_cap BIGINT,
     allocation_reason VARCHAR,
-    rank_20d INT,
     UNIQUE(as_of_date, ticker, period_days)
 )
 ```
@@ -586,15 +594,15 @@ API_KEY=your_api_key_here
 actstock_pipeline/
 ├── airflow/              # Airflow DAG 정의
 │   ├── dags/
-│   │   ├── daily_benchmark_etf_collection_dag.py           (Stage 1)
-│   │   ├── daily_sector_etf_collection_dag.py              (Stage 2)
-│   │   ├── daily_trending_etf_analysis_dag.py              (Stage 3)
-│   │   ├── daily_trending_etf_holdings_collection_dag.py   (Stage 4)
-│   │   ├── daily_portfolio_allocation_dag.py               (Stage 5)
-│   │   ├── monthly_portfolio_rebalance_dag.py              (Monthly)
-│   │   ├── etf_top_holdings_analysis_dag.py                (추가 분석)
-│   │   ├── etf_holdings_daily_dag.py                       (ETF 보유종목 수집)
-│   │   └── monthly_etf_collection_last_weekend_dag.py      (월말 ETF 수집)
+│   │   ├── 01_daily_benchmark_etf_collection_dag.py           (Stage 1)
+│   │   ├── 02_daily_sector_etf_collection_dag.py              (Stage 2)
+│   │   ├── 03_daily_trending_etf_analysis_dag.py              (Stage 3)
+│   │   ├── 04_daily_trending_etf_holdings_collection_dag.py   (Stage 4)
+│   │   ├── 05_daily_portfolio_allocation_dag.py               (Stage 5)
+│   │   ├── 08_monthly_portfolio_rebalance_dag.py              (Monthly)
+│   │   ├── 09_etf_top_holdings_analysis_dag.py                (추가 분석)
+│   │   ├── 06_etf_holdings_daily_dag.py                       (ETF 보유종목 수집)
+│   │   └── 07_monthly_etf_collection_last_weekend_dag.py      (월말 ETF 수집)
 │   └── logs/
 ├── api/                  # FastAPI 백엔드
 │   ├── routes/
@@ -610,20 +618,20 @@ actstock_pipeline/
 │   ├── main.py
 │   └── __init__.py
 ├── batch/                # Spark 배치 Jobs
-│   ├── spark_trending_etf_identifier.py       (Stage 3)
-│   ├── spark_active_stock_allocator.py        (Stage 5)
-│   ├── spark_monthly_portfolio_rebalancer.py  (Monthly)
+│   ├── spark_01_trending_etf_identifier.py       (Stage 3)
+│   ├── spark_02_active_stock_allocator.py        (Stage 5)
+│   ├── spark_04_monthly_portfolio_rebalancer.py  (Monthly)
 │   ├── spark_etf_top_holdings.py              (추가 분석)
 │   └── batch_monthly_sector_analyzer.py       (섹터 트렌딩 분석)
 ├── collector/            # Kafka Producers
-│   ├── kafka_producer_etf_daily.py                 (Stage 1, 2)
-│   ├── kafka_producer_trending_etf_holdings.py     (Stage 4)
-│   ├── kafka_producer_etf_holdings.py              (보유종목 수집)
-│   └── kafka_producer_stock_daily.py               (주식 OHLC 수집)
+│   ├── kafka_01_producer_etf_daily.py                 (Stage 1, 2)
+│   ├── kafka_03_producer_trending_etf_holdings.py     (Stage 4)
+│   ├── kafka_02_producer_etf_holdings.py              (보유종목 수집)
+│   └── kafka_04_producer_stock_daily.py               (주식 OHLC 수집)
 ├── consumer/             # Kafka Consumers
-│   ├── kafka_consumer_etf_daily.py
-│   ├── kafka_consumer_etf_holdings.py
-│   └── kafka_consumer_stock_daily.py
+│   ├── kafka_01_consumer_etf_daily.py
+│   ├── kafka_02_consumer_etf_holdings.py
+│   └── kafka_03_consumer_stock_daily.py
 ├── config/               # 설정 파일
 │   └── config.py
 ├── dashboard/            # Plotly Dash 대시보드
@@ -660,21 +668,12 @@ actstock_pipeline/
 
 ## 🔗 관련 문서
 
-### 시스템 아키텍처
-- **[README.md](README.md)**: 빠른 시작 가이드 및 시스템 개요
-- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 전체 시스템 아키텍처 (현재 문서)
-- **[SCHEDULING_STRATEGY.md](SCHEDULING_STRATEGY.md)**: 5-Stage Pipeline 스케줄 전략
-- **[DAG_SCHEDULE_REFERENCE.md](DAG_SCHEDULE_REFERENCE.md)**: Active/Disabled DAG 빠른 참조
-- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**: 자주 사용하는 명령어
-
-### 최신 기능
-- **[MULTI_PERIOD_IMPLEMENTATION.md](MULTI_PERIOD_IMPLEMENTATION.md)**: 멀티기간 포트폴리오 구현 상세
-- **[TESTING_MULTI_PERIOD.md](TESTING_MULTI_PERIOD.md)**: 멀티기간 기능 테스트 가이드
-- **[CLEANUP_SUMMARY.md](CLEANUP_SUMMARY.md)**: 문서/DB 정리 요약
-
-### 데이터베이스
-- **[database/schema.sql](database/schema.sql)**: PostgreSQL 스키마 정의
-- **[database/NAMING_CONVENTION.md](database/NAMING_CONVENTION.md)**: 테이블 명명 규칙
+### 시스템 아키텍처 및 가이드
+- **[README.md](README.md)**: 프로젝트 개요 및 빠른 시작 가이드
+- **[ARCHITECTURE.md](ARCHITECTURE.md)**: 상세 시스템 아키텍처 (현재 문서)
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)**: 자주 사용하는 명령어 퀵 래퍼런스
+- **[database/NAMING_CONVENTION.md](database/NAMING_CONVENTION.md)**: 데이터베이스 명명 규칙
+- **[test/README.md](test/README.md)**: 테스트 및 백필 가이드
 
 ---
 
@@ -717,6 +716,6 @@ actstock_pipeline/
 
 | 컨테이너 | 역할 | 토픽 | 테이블 |
 |----------|------|------|--------|
-| `consumer-etf-daily` | ETF OHLC 데이터 저장 | `etf-daily-data` | `collected_daily_etf_ohlc` |
-| `consumer-etf-holdings` | ETF Holdings 저장 | `etf-holdings-data` | `collected_etf_holdings` |
-| `consumer-stock-daily` | 주식 OHLC 데이터 저장 | `stock-daily-data` | `collected_daily_stock_history` |
+| `consumer-etf-daily` | ETF OHLC 데이터 저장 | `etf-daily-data` | `collected_01_daily_etf_ohlc` |
+| `consumer-etf-holdings` | ETF Holdings 저장 | `etf-holdings-data` | `collected_04_etf_holdings` |
+| `consumer-stock-daily` | 주식 OHLC 데이터 저장 | `stock-daily-data` | `collected_06_daily_stock_history` |

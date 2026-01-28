@@ -5,7 +5,7 @@
 Spark Batch Job - Trending ETF Identifier
 Identifies which ETFs are trending (outperforming SPY) for conditional holdings collection
 Runs at 11:00 UTC after ETF OHLC data collection
-Stores results in 03_analytics_trending_etfs table
+Stores results in 03_analytics_03_trending_etfs table
 """
 
 import os
@@ -75,8 +75,8 @@ class TrendingETFIdentifier:
                 e.close_price,
                 m.etf_type,
                 m.sector_name
-            FROM "01_collected_daily_etf_ohlc" e
-            LEFT JOIN "00_collected_meta_etf" m ON e.ticker = m.ticker
+            FROM collected_01_daily_etf_ohlc e
+            LEFT JOIN collected_00_meta_etf m ON e.ticker = m.ticker
             WHERE e.trade_date >= '{cutoff_date}'
             ORDER BY e.ticker, e.trade_date
         ) as etf_data"""
@@ -144,7 +144,6 @@ class TrendingETFIdentifier:
         spy_return = etf_returns.filter(F.col("ticker") == "SPY") \
                                 .select("return_pct") \
                                 .first()
-        
         if not spy_return:
             LOG.error("SPY data not found!")
             raise ValueError("SPY benchmark data is required")
@@ -213,22 +212,19 @@ class TrendingETFIdentifier:
         trending_pd = trending_df.toPandas()
         
         for _, row in trending_pd.iterrows():
+            # Schema: etf_ticker, as_of_date, period, return_pct, is_trending, rank
             upsert_query = """
-                INSERT INTO "03_analytics_trending_etfs" (
-                    as_of_date, ticker, etf_type, sector_name,
-                    return_pct, spy_return, is_trending, analysis_period_days
+                INSERT INTO analytics_03_trending_etfs (
+                    as_of_date, etf_ticker, period,
+                    return_pct, is_trending
                 ) VALUES (
-                    %(as_of_date)s, %(ticker)s, %(etf_type)s, %(sector_name)s,
-                    %(return_pct)s, %(spy_return)s, %(is_trending)s, %(analysis_period_days)s
+                    %(as_of_date)s, %(ticker)s, %(analysis_period_days)s,
+                    %(return_pct)s, %(is_trending)s
                 )
-                ON CONFLICT (as_of_date, ticker)
+                ON CONFLICT (as_of_date, etf_ticker, period)
                 DO UPDATE SET
-                    etf_type = EXCLUDED.etf_type,
-                    sector_name = EXCLUDED.sector_name,
                     return_pct = EXCLUDED.return_pct,
-                    spy_return = EXCLUDED.spy_return,
                     is_trending = EXCLUDED.is_trending,
-                    analysis_period_days = EXCLUDED.analysis_period_days,
                     created_at = NOW()
             """
             

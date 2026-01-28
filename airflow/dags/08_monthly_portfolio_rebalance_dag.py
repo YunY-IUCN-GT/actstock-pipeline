@@ -104,7 +104,7 @@ def validate_monthly_portfolio(**context):
         SELECT 
             COUNT(*) as stock_count,
             ROUND(SUM(final_weight) * 100, 2) as total_weight
-        FROM "08_analytics_monthly_portfolio"
+        FROM analytics_08_monthly_portfolio
         WHERE rebalance_date = %s
     """, (execution_date,))
     

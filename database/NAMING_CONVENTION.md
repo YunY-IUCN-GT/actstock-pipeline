@@ -26,53 +26,43 @@ Kafka Producer → Kafka Topic → Kafka Consumer → PostgreSQL (수집 데이�
 #### Collected (수집 데이터) - Kafka Consumer가 DB에 저장 (Airflow 스케줄 기반)
 Kafka Producer → Topic → Consumer → PostgreSQL
 
-- `collected_daily_stock_history` - 일별 주식 히스토리 (Stage 4)
+- `collected_06_daily_stock_history` - 일별 주식 히스토리 (Stage 4)
   - 수집: Airflow 5-Stage Pipeline (월-금 12:00 UTC)
+  - 저장: Kafka Consumer (`kafka_03_consumer_stock_daily.py`)
+  - 읽기: Spark, API
+
+- `collected_00_meta_etf` - ETF 메타데이터 + 보유종목
+  - 수집: Airflow `06_etf_holdings_daily_dag.py` (월-금 09:00 UTC)
   - 저장: Kafka Consumer (스케줄 배치)
   - 읽기: Spark, API
 
-- `collected_meta_etf` - ETF 메타데이터 + 보유종목
-  - 수집: Airflow etf_holdings_daily_dag (월-금 09:00 UTC)
-  - 저장: Kafka Consumer (스케줄 배치)
+- `collected_01_daily_etf_ohlc` - ETF 일별 OHLC (Stage 1, 2)
+  - 수집: Airflow 5-Stage Pipeline (월-금 09:00, 10:00 UTC)
+  - 저장: Kafka Consumer (`kafka_01_consumer_etf_daily.py`)
   - 읽기: Spark, API
 
-- `collected_daily_etf_ohlc` - ETF 일별 OHLC (Stage 1)
-  - 수집: Airflow 5-Stage Pipeline (월-금 09:00 UTC)
-  - 저장: Kafka Consumer (스케줄 배치)
+- `collected_04_etf_holdings` - ETF 보유종목 (Stage 4)
+  - 수집: Airflow `04_daily_trending_etf_holdings_collection_dag.py` (월-금 12:00 UTC)
+  - 저장: Kafka Consumer (`kafka_02_consumer_etf_holdings.py`)
   - 읽기: Spark, API
-
-- `collected_daily_benchmark_ohlc` - 벤치마크 OHLC (SPY/QQQ)
-  - 수집: Airflow benchmark_data_daily_dag (월-금 09:00 UTC)
-  - 저장: Kafka Consumer (스케줄 배치)
-  - 읽기: Spark
-
-- `collected_monthly_benchmark_holdings` - 벤치마크 보유종목 (SPY/QQQ)
-  - 수집: Airflow benchmark_holdings_monthly_dag (매월 1일 09:00 UTC)
-  - 저장: Kafka Consumer (스케줄 배치)
-  - 읽기: Spark
 
 #### Analytics (분석 결과) - Spark Batch Jobs가 계산하여 저장
 Airflow → Spark → PostgreSQL
 
-- `analytics_portfolio_allocation` - 액티브 포트폴리오 (5d/10d/20d)
-  - 계산: spark_active_stock_allocator.py (Airflow 5-Stage Pipeline Stage 5, 월-금 13:00 UTC)
+- `analytics_05_portfolio_allocation` - 액티브 포트폴리오 (5d/10d/20d)
+  - 계산: `spark_02_active_stock_allocator.py` (Stage 5, 월-금 13:00 UTC)
   - 저장: Spark Batch Job
   - 읽기: API, Dashboard
 
-- `analytics_monthly_portfolio` - 월별 리밸런싱 포트폴리오 (5d/10d/20d)
-  - 계산: spark_monthly_portfolio_rebalancer.py (Airflow 매월 마지막 일요일 14:00 UTC)
+- `analytics_08_monthly_portfolio` - 월별 리밸런싱 포트폴리오
+  - 계산: `spark_04_monthly_portfolio_rebalancer.py` (매월 마지막 일요일 14:00 UTC)
   - 저장: Spark Batch Job
   - 읽기: API, Dashboard
 
-- `analytics_sector_trending` - 월간 섹터 트렌딩
-  - 계산: batch_monthly_sector_analyzer.py (Airflow monthly_sector_trending_dag, 매월 1일 10:00 UTC)
+- `analytics_03_trending_etfs` - 트렌딩 ETF 분석 (Stage 3)
+  - 계산: `spark_01_trending_etf_identifier.py` (매일 11:00 UTC)
   - 저장: Spark Batch Job
-  - 읽기: API
-
-- `analytics_stock_trending` - 월간 종목 트렌딩
-  - 계산: batch_monthly_sector_analyzer.py (Airflow monthly_sector_trending_dag, 매월 1일 10:00 UTC)
-  - 저장: Spark Batch Job
-  - 읽기: API
+  - 읽기: Stage 4 Producer, API
 
 #### Logs (로그/에러)
 - `logs_consumer_error` - Kafka Consumer 파싱 에러
@@ -89,51 +79,46 @@ Airflow → Spark → PostgreSQL
 
 ### Airflow DAGs (스케줄 파이프라인)
 **5-Stage Daily Pipeline (월-금 09:00-13:00 UTC)**
-- `stock_market_pipeline.py` - 5-Stage 통합 파이프라인
+- `00_daily_pipeline_controller_dag.py` - 최상위 컨트롤러
+- `01_daily_benchmark_etf_collection_dag.py` - Stage 1 (Benchmark)
+- `02_daily_sector_etf_collection_dag.py` - Stage 2 (Sector)
+- `03_daily_trending_etf_analysis_dag.py` - Stage 3 (Analysis)
+- `04_daily_trending_etf_holdings_collection_dag.py` - Stage 4 (Holdings)
+- `05_daily_portfolio_allocation_dag.py` - Stage 5 (Allocation)
 
-**Daily Collectors (월-금)**
-- `etf_holdings_daily_dag.py` - ETF 메타 + 보유종목 (09:00 UTC)
-- `benchmark_data_daily_dag.py` - SPY/QQQ OHLC (09:00 UTC)
-
-**Monthly Collectors**
-- `benchmark_holdings_monthly_dag.py` - SPY/QQQ 보유종목 (매월 1일 09:00 UTC)
-- `monthly_sector_trending_dag.py` - 섹터/종목 트렌딩 (매월 1일 10:00 UTC)
-- `monthly_portfolio_rebalance_dag.py` - 월별 리밸런싱 (매월 마지막 일요일 14:00 UTC)
+**Monthly & Others**
+- `08_monthly_portfolio_rebalance_dag.py` - 월별 리밸런싱
+- `06_etf_holdings_daily_dag.py` - ETF 보유종목 일별 수집
+- `07_monthly_etf_collection_last_weekend_dag.py` - 월말 ETF 수집
+- `09_etf_top_holdings_analysis_dag.py` - 상위 보유종목 분석
 
 ### Spark (배치 분석 전용 - NO streaming)
 **Batch Jobs (Airflow가 스케줄링)**
-- `spark_active_stock_allocator.py` - 포트폴리오 분석 (5d/10d/20d)
-- `spark_monthly_portfolio_rebalancer.py` - 월별 리밸런싱 (5d/10d/20d)
-- `batch_monthly_sector_analyzer.py` - 섹터 트렌딩 분석
+- `spark_01_trending_etf_identifier.py` - 트렌딩 ETF 식별
+- `spark_02_active_stock_allocator.py` - 포트폴리오 분석
+- `spark_04_monthly_portfolio_rebalancer.py` - 월별 리밸런싱
+- `spark_03_etf_top_holdings.py` - ETF 보유종목 분석
+
+### Kafka Producers & Consumers
+- `kafka_01_producer_etf_daily.py` / `kafka_01_consumer_etf_daily.py`
+- `kafka_02_producer_etf_holdings.py` / `kafka_02_consumer_etf_holdings.py`
+- `kafka_03_producer_trending_etf_holdings.py`
+- `kafka_04_producer_stock_daily.py` / `kafka_03_consumer_stock_daily.py`
 
 ### API & Dashboard
-- `api_main.py`
-- `api_routes_stocks.py` - Stock 관련 API
-- `api_routes_sectors.py` - Sector 관련 API
-- `dashboard_finviz_app.py` - Dash 대시보드
+- `api/main.py`
+- `dashboard/dashboard_finviz_app.py`
 
 ## Kafka Topics: `topic_[name]`
-- `stock-market-data` - 5-Stage Pipeline 통합 토픽 (스케줄 배치)
-- `etf-holdings-data` - ETF 보유종목 토픽 (스케줄 배치)
-- `benchmark-ohlc-data` - 벤치마크 OHLC 토픽 (스케줄 배치)
-- `benchmark-holdings-data` - 벤치마크 보유종목 토픽 (스케줄 배치)
-
-## Airflow DAG IDs
-- `stock_market_data_pipeline` - 5-Stage 일별 파이프라인
-- `etf_holdings_daily_collection` - ETF 보유종목 일별 수집
-- `benchmark_data_daily_collection` - 벤치마크 일별 수집
-- `benchmark_holdings_monthly_collection` - 벤치마크 월별 수집
-- `monthly_sector_trending_analysis` - 월간 섹터 분석
-- `monthly_portfolio_rebalance` - 월별 리밸런싱
+- `etf-daily-data` - 일별 ETF 데이터
+- `etf-holdings-data` - ETF 보유종목 데이터
+- `stock-daily-data` - 일별 주식 데이터
 
 ## Docker Containers: `actstock_[service]`
 - `actstock_postgres`
 - `actstock_kafka`
-- `actstock_zookeeper`
 - `actstock_spark_master`
-- `actstock_spark_worker`
 - `actstock_airflow_webserver`
-- `actstock_airflow_scheduler`
 - `actstock_api`
 - `actstock_dashboard`
 

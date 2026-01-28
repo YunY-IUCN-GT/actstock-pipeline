@@ -37,7 +37,7 @@ def check_data_availability(**context):
     
     try:
         # Check ETF metadata
-        etf_count_query = "SELECT COUNT(*) as cnt FROM 00_collected_meta_etf"
+        etf_count_query = "SELECT COUNT(*) as cnt FROM collected_00_meta_etf"
         etf_result = db.fetch_one(etf_count_query)
         etf_count = etf_result['cnt'] if etf_result else 0
         
@@ -48,7 +48,7 @@ def check_data_availability(**context):
             SELECT COUNT(DISTINCT ticker) as tickers,
                    COUNT(DISTINCT trade_date) as days,
                    MAX(trade_date) as latest_date
-            FROM 06_collected_daily_stock_history
+            FROM collected_06_daily_stock_history
             WHERE trade_date >= NOW() - INTERVAL '40 days'
         """
         history_result = db.fetch_one(history_query)
@@ -65,7 +65,7 @@ def check_data_availability(**context):
                 raise ValueError(f"Insufficient history: only {history_result['days']} days (need >= 20)")
         
         # Check ETF holdings data
-        holdings_query = "SELECT COUNT(*) as cnt FROM 04_collected_etf_holdings"
+        holdings_query = "SELECT COUNT(*) as cnt FROM collected_04_etf_holdings"
         holdings_result = db.fetch_one(holdings_query)
         holdings_count = holdings_result['cnt'] if holdings_result else 0
         
@@ -137,7 +137,7 @@ def verify_results(**context):
                 COUNT(*) as record_count,
                 COUNT(DISTINCT etf_ticker) as etf_count,
                 MAX(as_of_date) as latest_date
-            FROM 09_analytics_etf_top_holdings
+            FROM analytics_09_etf_top_holdings
             WHERE as_of_date >= CURRENT_DATE - INTERVAL '2 days'
             GROUP BY time_period
             ORDER BY time_period

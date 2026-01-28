@@ -28,8 +28,8 @@ async def get_sectors():
                 m.sector_name,
                 o.trade_date,
                 0::numeric AS price_change_percent
-            FROM "01_collected_daily_etf_ohlc" o
-            JOIN "00_collected_meta_etf" m ON m.ticker = o.ticker
+            FROM collected_01_daily_etf_ohlc o
+            JOIN collected_00_meta_etf m ON m.ticker = o.ticker
             WHERE m.etf_type = 'sector'
             ORDER BY m.ticker, o.trade_date DESC
         """
@@ -41,7 +41,7 @@ async def get_sectors():
 
         count_query = """
             SELECT sector, COUNT(*) AS stock_count
-            FROM "06_collected_daily_stock_history"
+            FROM collected_06_daily_stock_history
             GROUP BY sector
         """
         count_results = db.fetch_all(count_query)
