@@ -63,9 +63,9 @@ class ETFTopHoldingsAnalyzer:
             etf_type_filter: Optional filter for 'benchmark' or 'sector'
         """
         if etf_type_filter:
-            query = f"(SELECT ticker, etf_type, sector_name FROM 00_collected_meta_etf WHERE etf_type = '{etf_type_filter}') as etf_meta"
+            query = f"(SELECT ticker, etf_type, sector_name FROM \"00_collected_meta_etf\" WHERE etf_type = '{etf_type_filter}') as etf_meta"
         else:
-            query = "(SELECT ticker, etf_type, sector_name FROM 00_collected_meta_etf) as etf_meta"
+            query = "(SELECT ticker, etf_type, sector_name FROM \"00_collected_meta_etf\") as etf_meta"
         
         df = self.spark.read.jdbc(
             url=self.jdbc_url,
@@ -97,7 +97,7 @@ class ETFTopHoldingsAnalyzer:
                 volume,
                 price_change_percent,
                 market_cap
-            FROM 06_collected_daily_stock_history
+            FROM "06_collected_daily_stock_history"
             WHERE trade_date >= '{cutoff_date}'
         ) as stock_history"""
         
@@ -122,7 +122,7 @@ class ETFTopHoldingsAnalyzer:
                 holding_name,
                 holding_percent,
                 as_of_date
-            FROM 04_collected_etf_holdings
+            FROM "04_collected_etf_holdings"
             ORDER BY etf_ticker, holding_ticker, as_of_date DESC
         ) as holdings"""
         
@@ -264,7 +264,7 @@ class ETFTopHoldingsAnalyzer:
     def cleanup_old_data(self, as_of_date: date):
         """Remove duplicate entries for the same date before inserting new ones"""
         delete_query = f"""
-            DELETE FROM 09_analytics_etf_top_holdings
+            DELETE FROM "09_analytics_etf_top_holdings"
             WHERE as_of_date = '{as_of_date.strftime('%Y-%m-%d')}'
         """
         try:

@@ -1,365 +1,70 @@
-````markdown
-# ETF 데이터 수집 스케줄링 전략
+# ETF 데이터 수집 스케줄링 전략 (Controller 기반)
 
 ## 개요
-이 문서는 yfinance API Rate Limit을 피하면서 일별 및 월간 데이터를 포괄적으로 확보하기 위해 설계된 ETF 데이터의 **스케줄 배치 수집** 전략을 설명합니다.
-
-## 핵심 원칙
-
-### 🚫 실시간 스트리밍 없음
-- **ETF 데이터는 지속적으로 수집되지 않습니다**
-- **수집은 하루 4회 (월-금) + 월 1회 (마지막 토)에 발생**
-- 각 수집은 실시간 스트림이 아닌 **스케줄 배치 작업**
-
-### 📅 스케줄 배치 수집 (5-Stage Pipeline)
-```
-일별: 5-stage workflow (월-금)
-  ├─ 09:00 UTC: Stage 1 - Benchmark ETF OHLC (6개)
-  ├─ 10:00 UTC: Stage 2 - Sector ETF OHLC (11개)
-  ├─ 11:00 UTC: Stage 3 - Trending ETF 식별 (Spark)
-  ├─ 12:00 UTC: Stage 4 - Conditional Holdings (트렌딩 ETF만)
-  └─ 13:00 UTC: Stage 5 - Portfolio Allocation (Spark)
-
-특징:
-  • 트렌딩 ETF만 타겟팅 → API 호출 50-70% 감소
-  • 1주 per 트렌딩 ETF 선정 (absolute best performer)
-  • Weight = performance × inverse market cap
-```
-
-### 🔄 두 가지 수집 경로 (동일 스케줄)
-
-**표준 경로: 스케줄 Kafka 파이프라인**
-```
-Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
-```
-- 수집 이력 로그 보관
-- 재처리 가능
-- 모니터링에 유리
-- **모든 DAG에서 사용하는 표준 방식**
-
-**⚠️ 중요**: Kafka는 **스케줄 배치**로 실행 (실시간 아님)
-
-## Rate Limit 문제
-- **yfinance 무료 티어**: 분당 요청 수 제한
-- **시장 개장일**: API 트래픽 증가로 Rate Limit 위험 증가
-- **대량 수집**: 여러 ETF를 순차적으로 수집하면 429 에러 발생 가능
-- **해결책**: 그룹 간 시간 분산을 통한 분산 스케줄링
-
-## 스케줄링 아키텍처
-
-### 일별 수집 (평일만: 월-금)
-
-```
-09:00 UTC → Stage 1: Benchmark ETF OHLC (6 ETFs)
-              ↓ (1시간 버퍼)
-10:00 UTC → Stage 2: Sector ETF OHLC (11 ETFs)
-              ↓ (1시간 버퍼)
-11:00 UTC → Stage 3: Trending ETF Identification (Spark vs SPY)
-              ↓ (1시간 버퍼)
-12:00 UTC → Stage 4: Conditional Holdings (트렌딩 ETF의 top 5만)
-              ↓ (1시간 버퍼)
-13:00 UTC → Stage 5: Portfolio Allocation (1주 per 트렌딩 ETF)
-```
-
-### 월간 수집 (마지막 주말)
-```
-마지막 토요일 @ 08:00 UTC → 전체 ETF + 전체 Top Holdings 분석 (스케줄 배치)
-```
-
-## 그룹 상세
-
-### 그룹 1: 벤치마크 ETF 데이터 수집
-**DAG**: `daily_benchmark_etf_collection_dag.py`  
-**스케줄**: `0 9 * * 1-5` (월-금 오전 9시 UTC)  
-**실행**: **하루 1회** (스케줄 배치, 스트리밍 아님)  
-**티커**: SPY, QQQ, IWM, EWY, DIA, SCHD (6개 ETF)  
-**Rate Limit**: 티커 간 5초  
-**총 소요 시간**: ~30초
-
-**수행 작업**:
-- 6개 벤치마크 ETF의 OHLC 데이터 가져오기
-- `collected_daily_etf_ohlc` 테이블에 저장
-- 평일 확인으로 주말 실행 방지
-- **1회 실행 후 정지** (지속 실행 아님)
-
-### 그룹 2: 섹터 ETF 데이터 수집
-**DAG**: `daily_sector_etf_collection_dag.py`  
-**스케줄**: `0 10 * * 1-5` (월-금 오전 10시 UTC)  
-**실행**: **하루 1회** (스케줄 배치, 스트리밍 아님)  
-**티커**: XLK, XLV, XLF, XLY, XLC, XLI, XLP, XLE, XLU, XLRE, XLB (11개 ETF)  
-**Rate Limit**: 티커 간 5초  
-**총 소요 시간**: ~55초
-
-**수행 작업**:
-- 11개 섹터 ETF의 OHLC 데이터 가져오기
-- `collected_daily_etf_ohlc` 테이블에 저장
-- 부하 분산을 위해 그룹 1 후 1시간 뒤 실행
-- **1회 실행 후 정지** (지속 실행 아님)
-
-### 그룹 3: 벤치마크 Top Holdings 분석
-**DAG**: `daily_benchmark_top_holdings_dag.py`  
-**스케줄**: `0 11 * * 1-5` (월-금 오전 11시 UTC)  
-**실행**: **하루 1회** (스케줄 배치)  
-**종속성**: 그룹 1 데이터 필요 (최소 4/6개 ETF)  
-**처리**: `ETF_TYPE_FILTER=benchmark`로 Spark 작업
-
-**수행 작업**:
-1. 벤치마크 ETF 데이터 가용성 확인 (4/6 임계값)
-2. 다음에 대한 Top 5 holdings 계산 Spark 작업 실행:
-   - 5일 윈도우
-   - 10일 윈도우
-   - 20일 윈도우 (월간)
-3. 결과를 `analytics_etf_top_holdings`에 저장
-4. **1회 실행 후 정지**
-
-### 그룹 4: 섹터 Top Holdings 분석
-**DAG**: `daily_sector_top_holdings_dag.py`  
-**스케줄**: `0 12 * * 1-5` (월-금 오후 12시 UTC)  
-**실행**: **하루 1회** (스케줄 배치)  
-**종속성**: 그룹 2 데이터 필요 (최소 8/11개 ETF)  
-**처리**: `ETF_TYPE_FILTER=sector`로 Spark 작업
-
-**수행 작업**:
-1. 섹터 ETF 데이터 가용성 확인 (8/11 임계값)
-2. 다음에 대한 Top 5 holdings 계산 Spark 작업 실행:
-   - 5일 윈도우
-   - 10일 윈도우
-   - 20일 윈도우 (월간)
-3. 결과를 `analytics_etf_top_holdings`에 저장
-4. **1회 실행 후 정지**
-
-### 월간 수집: 마지막 주말 배치
-**DAG**: `monthly_etf_collection_last_weekend_dag.py`  
-**스케줄**: `0 8 * * 6` (매주 토요일 오전 8시 UTC, 마지막 주말로 필터링)  
-**실행**: **월 1회** (스케줄 배치)  
-**티커**: 전체 17개 ETF (벤치마크 6개 + 섹터 11개)  
-**Rate Limit**: 티커 간 8초 (안전을 위해 더 엄격)  
-**총 소요 시간**: ~2.5분
-
-**수행 작업**:
-1. 현재 날짜가 월의 마지막 주말인지 확인 (day > last_day - 7 AND weekday in [5, 6])
-2. 모든 ETF의 최근 5거래일 수집
-3. 포괄적인 Top Holdings 분석 실행 (필터링 없음)
-4. 평일 시장 개장일 간섭 없이 월간 데이터 스냅샷 보장
-5. **1회 실행 후 정지**
-
-**왜 마지막 주말?**:
-- 평일 시장 개장일 피함 (API 트래픽 낮음)
-- 토요일/일요일은 일반적으로 yfinance 사용량 최소
-- 다음 주 일별 수집 시작 전 버퍼 제공
-
-## 평일 필터링 로직
-
-모든 일별 DAG는 평일 확인 구현:
-
-```python
-def is_weekday(**context):
-    """실행 날짜가 평일(월-금)인지 확인"""
-    execution_date = context['execution_date']
-    weekday = execution_date.weekday()  # 0=월, 6=일
-    if weekday >= 5:  # 토요일 또는 일요일
-        raise ValueError(f"Skipping execution on {execution_date.strftime('%A')}")
-    return True
-```
-
-## 월간 마지막 주말 로직
-
-```python
-from calendar import monthrange
-
-def is_last_weekend(**context):
-    """실행 날짜가 월의 마지막 주말인지 확인"""
-    execution_date = context['execution_date']
-    year = execution_date.year
-    month = execution_date.month
-    day = execution_date.day
-    weekday = execution_date.weekday()
-    
-    # 월의 마지막 날 가져오기
-    last_day = monthrange(year, month)[1]
-    
-    # 마지막 7일 이내이고 주말(토=5, 일=6)인지 확인
-    if day > (last_day - 7) and weekday in [5, 6]:
-        return True
-    
-    raise ValueError("Not the last weekend of the month")
-```
-
-## 데이터 준비 상태 확인
-
-그룹 3과 4는 Spark 작업 실행 전 소스 데이터 가용성 확인:
-
-### 벤치마크 데이터 확인 (그룹 3)
-- 필요: 6개 벤치마크 ETF 중 4개
-- 임계값: 66% 데이터 가용성
-- 근거: 일부 ETF 실패해도 분석 진행 가능
-
-### 섹터 데이터 확인 (그룹 4)
-- 필요: 11개 섹터 ETF 중 8개
-- 임계값: 73% 데이터 가용성
-- 근거: 섹터 분석이 대다수 커버리지로 더 견고함
-
-## 시간대 고려사항
-
-- **모든 스케줄은 UTC** (협정 세계시)
-- **현지 시간대로 변환**:
-  - EST (뉴욕): UTC - 5시간
-  - PST (로스앤젤레스): UTC - 8시간
-  - KST (한국): UTC + 9시간
-  - 예: 오전 9시 UTC = 오전 4시 EST = 오전 1시 PST = 오후 6시 KST
-
-### 다른 시간대의 일별 스케줄
-
-| UTC 시간 | EST 시간 | PST 시간 | KST 시간 | 그룹 |
-|----------|----------|----------|----------|-------|
-| 09:00    | 04:00    | 01:00    | 18:00    | 벤치마크 ETF 데이터 |
-| 10:00    | 05:00    | 02:00    | 19:00    | 섹터 ETF 데이터 |
-| 11:00    | 06:00    | 03:00    | 20:00    | 벤치마크 Holdings |
-| 12:00    | 07:00    | 04:00    | 21:00    | 섹터 Holdings |
-
-## Rate Limiting 세부사항
-
-### 일별 수집 (그룹 1-2)
-```python
-for ticker in tickers:
-    data = yf.download(ticker, ...)
-    time.sleep(5)  # 5초 지연
-```
-- **비율**: 분당 12개 티커
-- **안전 여유**: 버스트 피하기 위해 보수적
-
-### 월간 수집
-```python
-for ticker in all_tickers:
-    data = yf.download(ticker, ...)
-    time.sleep(8)  # 8초 지연 (더 엄격)
-```
-- **비율**: 분당 7.5개 티커
-- **근거**: 배치 수집을 위한 추가 안전
-
-## DAG 종속성
-
-```
-그룹 1 (벤치마크 데이터)
-   └─→ 그룹 3 (벤치마크 Holdings) [2시간 지연]
-
-그룹 2 (섹터 데이터)
-   └─→ 그룹 4 (섹터 Holdings) [2시간 지연]
-```
-
-**교차 종속성 없음**: 벤치마크와 섹터 파이프라인은 독립적
-
-## 모니터링 및 트러블슈팅
-
-### DAG 상태 확인
-```bash
-docker compose exec airflow airflow dags list | grep daily
-docker compose exec airflow airflow dags list | grep monthly
-```
-
-### 다음 실행 시간 보기
-```bash
-docker compose exec airflow airflow dags show daily_benchmark_etf_collection
-```
-
-### DAG 활성화/비활성화
-```bash
-# 활성화
-docker compose exec airflow airflow dags unpause daily_benchmark_etf_collection
-
-# 비활성화
-docker compose exec airflow airflow dags pause daily_benchmark_etf_collection
-```
-
-### 실행 로그 모니터링
-```bash
-docker compose logs -f airflow
-```
-
-### 일반적인 문제
-
-**문제**: DAG가 주말에 실행됨  
-**해결책**: DAG 코드의 `is_weekday()` 함수 확인
-
-**문제**: 월간 수집이 매주 토요일마다 실행됨  
-**해결책**: `calendar.monthrange()`로 `is_last_weekend()` 로직 확인
-
-**문제**: Rate Limit 에러 (429)  
-**해결책**: 티커 간 지연 증가 (5초 → 8초 이상)
-
-**문제**: 데이터 누락으로 그룹 3/4 건너뜀  
-**해결책**: 그룹 1/2 실행 성공 확인, 임계값 검토 (4/6 또는 8/11)
-
-## 테스트 전략
-
-### 개별 DAG 테스트
-```bash
-docker compose exec airflow airflow dags test daily_benchmark_etf_collection 2024-01-15
-```
-
-### 평일 로직 테스트
-```bash
-# 성공해야 함 (월요일)
-airflow dags test daily_benchmark_etf_collection 2024-01-15
-
-# ValueError로 실패해야 함 (일요일)
-airflow dags test daily_benchmark_etf_collection 2024-01-14
-```
-
-### 월간 로직 테스트
-```bash
-# 성공해야 함 (1월 마지막 토요일)
-airflow dags test monthly_etf_collection_last_weekend 2024-01-27
-
-# 실패해야 함 (첫 번째 토요일)
-airflow dags test monthly_etf_collection_last_weekend 2024-01-06
-```
-
-## 배포 체크리스트
-
-- [ ] `airflow/dags/`에 5개 DAG 파일 모두 있는지 확인
-- [ ] Spark 작업이 `ETF_TYPE_FILTER` 환경 변수 지원하는지 확인
-- [ ] 평일 필터링 로직 테스트
-- [ ] 월간 마지막 주말 로직 테스트
-- [ ] 새 DAG 활성화:
-  - `daily_benchmark_etf_collection`
-  - `daily_sector_etf_collection`
-  - `daily_benchmark_top_holdings`
-  - `daily_sector_top_holdings`
-  - `monthly_etf_collection_last_weekend`
-- [ ] 이전 충돌 DAG 비활성화/중단:
-  - `benchmark_data_daily_dag` (존재하는 경우)
-  - `etf_top_holdings_analysis_dag` (이전 일별 버전)
-- [ ] 각 DAG의 첫 실행 모니터링
-- [ ] `analytics_etf_top_holdings` 테이블의 데이터 확인
-- [ ] 팀을 위한 시간대 변환 문서화
-
-## 성능 메트릭
-
-### 예상 일별 실행 시간
-- 그룹 1: ~30초 (6개 ETF × 5초)
-- 그룹 2: ~55초 (11개 ETF × 5초)
-- 그룹 3: ~5-10분 (Spark 작업)
-- 그룹 4: ~5-10분 (Spark 작업)
-- **총**: 4시간에 걸쳐 ~20-30분
-
-### 예상 월간 실행 시간
-- 데이터 수집: ~2.5분 (17개 ETF × 8초)
-- 분석: ~10-15분 (모든 ETF의 Spark 작업)
-- **총**: ~15-20분
-
-## 향후 최적화
-
-1. **동적 Rate Limiting**: API 응답 시간에 따라 지연 조정
-2. **병렬 Spark 작업**: 그룹 3 & 4 동시 실행 (테스트 필요)
-3. **재시도 로직**: 실패한 티커 가져오기에 지수 백오프 구현
-4. **알림**: 실패 시 Slack/이메일 알림 추가
-5. **메트릭 대시보드**: 성공률, 실행 시간, API 에러 추적
-
-## 참조
-
-- [Airflow Cron 구문](https://airflow.apache.org/docs/apache-airflow/stable/core-concepts/dags.html#cron)
-- [yfinance 문서](https://pypi.org/project/yfinance/)
-- [Python calendar.monthrange](https://docs.python.org/3/library/calendar.html#calendar.monthrange)
-
-````
+이 문서는 yfinance API Rate Limit을 피하고 데이터 의존성을 보장하기 위해 설계된 **Controller DAG 기반 순차적 스케줄링 전략**을 설명합니다.
+
+## 핵심 변경 사항 (Controller 도입)
+기존의 시간 기반 독립 실행 방식에서 **Master Controller DAG**가 전체 파이프라인을 순차적으로 제어하는 방식으로 변경되었습니다.
+
+### ✅ 새로운 실행 로직
+1. **단일 진입점**: `daily_pipeline_controller_dag`만 스케줄링됨 (매일 21:30 UTC, 장 마감 30분 후)
+2. **순차 실행**: Controller가 각 단계(Stage)를 순서대로 트리거하고 완료를 대기
+3. **지연 보장**: 단계 사이에 명시적인 대기 시간(1시간)을 Controller가 강제
+
+## 상세 스케줄 (월-금, UTC)
+
+**트리거**: 매일 21:30 UTC (`00_daily_pipeline_controller_dag`)
+
+| 순서 | 작업 (Stage) | 실행 시점 | 비고 |
+|------|-------------|-----------|------|
+| 1 | **Stage 1**: Benchmark ETF Collection | 21:30 UTC | 장 마감 +30분 후 시작 |
+| - | *(대기)* | Stage 1 완료 후 | **1시간 대기** |
+| 2 | **Stage 2**: Sector ETF Collection | Stage 1 + 1h | 벤치마크 수집 완료 보장 |
+| 3 | **Stage 3**: Trending ETF Analysis (Spark) | Stage 2 완료 즉시 | 데이터분석 즉시 실행 |
+| - | *(대기)* | Stage 3 완료 후 | **1시간 대기** |
+| 4 | **Stage 4**: Trending Holdings Collection | Stage 3 + 1h | 트렌딩 분석 완료 보장 |
+| 5 | **Stage 5**: Portfolio Allocation (Spark) | Stage 4 완료 즉시 | 최종 포트폴리오 생성 |
+
+## 단계별 상세
+
+### Controller (`00_daily_pipeline_controller_dag`)
+- **역할**: 오케스트레이션 마스터
+- **스케줄**: `30 21 * * 1-5` (유일하게 스케줄링되는 DAG)
+- **로직**: `TriggerDagRunOperator`와 `PythonOperator(sleep)`를 사용하여 순차 실행 제어
+
+### Stage 1: Benchmark ETF (`01_daily_benchmark_etf_collection_dag`)
+- **대상**: SPY, QQQ, IWM, EWY, DIA, SCHD
+- **실행**: Controller에 의해 트리거 (Schedule=None)
+- **특징**: 가장 먼저 실행되어 시장 데이터 확보
+
+### Stage 2: Sector ETF (`02_daily_sector_etf_collection_dag`)
+- **대상**: 10개 섹터 ETF (XLF, XLV 등)
+- **실행**: Stage 1 완료 **1시간 후** 트리거 (Schedule=None)
+- **이유**: yfinance API 부하 분산
+
+### Stage 3: Trending Analysis (`03_daily_trending_etf_analysis_dag`)
+- **작업**: Spark로 트렌딩 ETF 식별 (vs SPY)
+- **실행**: Stage 2 완료 **즉시** 트리거
+- **이유**: 데이터 수집이 끝났으므로 분석은 바로 수행 가능
+
+### Stage 4: Holdings Collection (`04_daily_trending_etf_holdings_collection_dag`)
+- **작업**: 트렌딩 ETF의 보유 종목 수집
+- **실행**: Stage 3 완료 **1시간 후** 트리거
+- **이유**: 분석 결과 확인 및 API 쿨링 타임
+
+### Stage 5: Portfolio Allocation (`05_daily_portfolio_allocation_dag`)
+- **작업**: Spark로 포트폴리오 비중 계산 (5d/10d/20d)
+- **실행**: Stage 4 완료 **즉시** 트리거
+
+## 수동 실행 및 Backfill
+- **수동 실행**: Airflow UI에서 `daily_pipeline_controller` DAG만 트리거하면 전체 파이프라인이 순차적으로 실행됩니다.
+- **실패 시 복구**: 특정 단계가 실패하면, 문제를 해결한 후 해당 단계의 Sub-DAG를 클리어하거나 Controller를 다시 실행할 수 있습니다.
+- **Backfill**: `TriggerDagRunOperator`가 execution_date를 전파하므로 Controller DAG를 Backfill하면 하위 DAG들도 해당 날짜로 실행됩니다.
+
+## 장점
+1. **확실한 순서 보장**: 이전 단계가 실패하면 다음 단계가 실행되지 않음 (데이터 정합성 유지)
+2. **명확한 지연 시간**: `ExternalTaskSensor`의 폴링 방식보다 명시적인 `sleep`이나 `TimeDelta`가 API Rate Limit 관리에 더 유리
+3. **관리 용이성**: Controller DAG 하나만 관리하면 됨
+
+## 모니터링
+Airflow의 **Graph View** 또는 **Gantt Chart**에서 `daily_pipeline_controller`를 보면 전체 흐름과 진행 상황을 한눈에 파악할 수 있습니다.

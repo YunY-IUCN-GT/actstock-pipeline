@@ -63,8 +63,9 @@ docker compose ps
 # 대시보드 접속
 http://localhost:8050
 
-# Airflow 접속
-http://localhost:8080  # admin/admin
+# Airflow 접속 및 실행
+# http://localhost:8080 (admin/admin)
+# 'daily_pipeline_controller' DAG를 활성화(Unpause) 하세요.
 ```
 
 ---
@@ -72,31 +73,22 @@ http://localhost:8080  # admin/admin
 ## 📊 데이터 플로우
 
 ```
-5-Stage Pipeline (Mon-Fri, UTC):
+5-Stage Pipeline (Mon-Fri, Starting 21:30 UTC via Controller):
 
-09:00 │ Stage 1: Benchmark ETF Collection
-      └─→ collected_daily_etf_ohlc (SPY, QQQ, IWM, EWY, DIA, SCHD - 6개)
-
-10:00 │ Stage 2: Sector ETF Collection  
-      └─→ collected_daily_etf_ohlc (QQQ, XLF, XLV, XLY, XLC, XLI, XLP, XLU, XLRE, XLB - 10개)
-      └─→ Note: QQQ는 Technology 섹터 대표 (총 15 unique ETFs)
-
-11:00 │ Stage 3: Trending ETF Analysis (Spark)
-      ├─→ Read: collected_daily_etf_ohlc
-      ├─→ Logic: return_20d > SPY AND return_20d > 0
+Stage 1 (Start) │ Benchmark ETF Collection
+      └─→ collected_daily_etf_ohlc
+      ↓ (1 hour delay)
+Stage 2         │ Sector ETF Collection  
+      └─→ collected_daily_etf_ohlc
+      ↓ (Immediate)
+Stage 3         │ Trending ETF Analysis (Spark)
       └─→ Write: analytics_trending_etfs
-
-12:00 │ Stage 4: Conditional Holdings Collection
-      ├─→ Read: analytics_trending_etfs (trending only)
-      ├─→ Collect: yfinance API (top 5 holdings per trending ETF)
-      ├─→ Write: collected_etf_holdings
-      └─→ Write: collected_daily_stock_history
-
-13:00 │ Stage 5: Multi-Period Portfolio Allocation (Spark)
-      ├─→ Read: analytics_trending_etfs, collected_etf_holdings, collected_daily_stock_history
-      ├─→ Logic: TOP 1 performer per ETF, Weight = Perf × (1/MCap)
-      ├─→ Periods: 5 days, 10 days, 20 days
-      └─→ Write: analytics_portfolio_allocation (3 separate portfolios)
+      ↓ (1 hour delay)
+Stage 4         │ Conditional Holdings Collection
+      └─→ Write: collected_etf_holdings
+      ↓ (Immediate)
+Stage 5         │ Multi-Period Portfolio Allocation (Spark)
+      └─→ Write: analytics_portfolio_allocation
 
 API/Dashboard:
       └─→ Read: analytics_trending_etfs, analytics_portfolio_allocation

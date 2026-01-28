@@ -77,7 +77,7 @@ class ActiveStockAllocator:
                 spy_return_20d,
                 outperformance,
                 rank_by_outperformance
-            FROM 03_analytics_trending_etfs
+            FROM "03_analytics_trending_etfs"
             WHERE as_of_date = '{as_of_date}'
               AND is_trending = TRUE
             ORDER BY rank_by_outperformance
@@ -114,7 +114,7 @@ class ActiveStockAllocator:
                 ticker,
                 trade_date,
                 close_price
-            FROM 01_collected_daily_etf_ohlc
+            FROM "01_collected_daily_etf_ohlc"
             WHERE trade_date >= '{cutoff_date}'
               AND ticker IN ('SPY', 'XLK', 'XLV', 'XLF', 'XLY', 'XLC', 'XLI', 'XLP', 'XLE', 'XLU', 'XLRE', 'XLB')
             ORDER BY ticker, trade_date
@@ -149,7 +149,7 @@ class ActiveStockAllocator:
                 trade_date,
                 close_price,
                 market_cap
-            FROM 06_collected_daily_stock_history
+            FROM "06_collected_daily_stock_history"
             WHERE trade_date >= '{cutoff_date}'
               AND sector IS NOT NULL
               AND sector != 'Unknown'
@@ -467,7 +467,7 @@ class ActiveStockAllocator:
             period_days = row['period_days']
             
             upsert_query = """
-                INSERT INTO 05_analytics_portfolio_allocation (
+                INSERT INTO "05_analytics_portfolio_allocation" (
                     as_of_date, ticker, company_name, sector, market_cap,
                     return_20d, portfolio_weight, 
                     allocation_reason, rank_20d, period_days
@@ -628,7 +628,7 @@ class ActiveStockAllocator:
                 SELECT DISTINCT 
                     etf_ticker,
                     ticker as holding_ticker
-                FROM 04_collected_etf_holdings
+                FROM "04_collected_etf_holdings"
                 WHERE as_of_date >= '{as_of_date - timedelta(days=30)}'
             ) as holdings"""
             

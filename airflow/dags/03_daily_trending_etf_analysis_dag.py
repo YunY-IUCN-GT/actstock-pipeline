@@ -3,8 +3,8 @@
 
 """
 Airflow DAG - Daily Trending ETF Analysis
-Schedule: Weekdays only, 11:00 UTC (after ETF OHLC collections)
-Depends on: Group 1 (09:00) and Group 2 (10:00) ETF data
+Schedule: Weekdays only, 22:30 UTC (after ETF OHLC collections)
+Depends on: Group 1 and Group 2 ETF data
 Triggers Spark job to identify which ETFs are trending vs SPY
 """
 
@@ -16,6 +16,7 @@ import sys
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 
 sys.path.insert(0, '/opt/airflow/project')
 
@@ -178,19 +179,22 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 1,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(
     'daily_trending_etf_analysis',
     default_args=default_args,
-    description='Identify trending ETFs (outperforming SPY) for conditional holdings collection',
-    schedule_interval='0 11 * * 1-5',  # 11:00 UTC, weekdays only
+    description='Identify trending ETFs - Triggered by Controller',
+    schedule_interval=None,  # Controlled by master DAG
     start_date=datetime(2026, 1, 26),
     catchup=False,
-    tags=['analytics', 'trending', 'etf', 'spark', 'scheduled'],
+    tags=['analytics', 'trending', 'etf', 'spark', 'controller-managed'],
+    max_active_runs=1,
 )
+
+# ExternalTaskSensor removed - dependency managed by Controller DAG
 
 # Task 1: Check if weekday
 branch_weekday = BranchPythonOperator(
@@ -219,6 +223,7 @@ run_spark = PythonOperator(
     task_id='run_trending_etf_identifier',
     python_callable=run_trending_etf_spark,
     provide_context=True,
+    execution_timeout=timedelta(minutes=15),
     dag=dag,
 )
 

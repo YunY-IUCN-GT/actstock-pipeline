@@ -37,7 +37,7 @@ API_HEADERS = {
 
 # 섹터 ETF 매핑
 SECTOR_ETF_MAP = {
-    'Technology': 'QQQ',
+    'Technology': 'XLK',
     'Financial': 'XLF',
     'Healthcare': 'XLV',
     'Consumer Cyclical': 'XLY',
@@ -56,7 +56,7 @@ BENCHMARK_ETFS = {
     'Dow Jones': 'DIA',
     'Korea': 'EWY',
     'Dividend': 'SCHD',
-    'NASDAQ': 'QQQ'  # QQQ는 섹터이면서 벤치마크로도 사용
+    'NASDAQ': 'QQQ'  # QQQ는 벤치마크 전용
 }
 
 # 전체 ETF 리스트 (섹터 + 벤치마크, 중복 제거)

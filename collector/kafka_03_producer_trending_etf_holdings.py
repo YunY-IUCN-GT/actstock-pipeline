@@ -66,7 +66,7 @@ class TrendingETFHoldingsProducer:
         try:
             query = """
                 SELECT ticker, etf_type, sector_name, return_pct, spy_return
-                FROM 03_analytics_trending_etfs
+                FROM "03_analytics_trending_etfs"
                 WHERE as_of_date = CURRENT_DATE
                   AND is_trending = TRUE
                 ORDER BY return_pct DESC

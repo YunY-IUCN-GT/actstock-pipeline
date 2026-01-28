@@ -80,7 +80,7 @@ class ETFDailyDataConsumer:
             
             # Insert query with conflict handling (upsert)
             insert_query = """
-                INSERT INTO 01_collected_daily_etf_ohlc (
+                INSERT INTO "01_collected_daily_etf_ohlc" (
                     ticker,
                     trade_date,
                     open_price,

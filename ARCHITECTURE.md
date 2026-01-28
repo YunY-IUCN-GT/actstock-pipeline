@@ -15,20 +15,16 @@
                                     │
                                     ▼
               ┌──────────────────────────────────────────┐
-              │         Airflow DAG Scheduler            │
-              │  월-금: Daily (09:00-13:00)              │
-              │  매월 마지막 일요일: Monthly (14:00)      │
+              │           Controller DAG                 │
+              │      Daily 21:30 UTC (Market Close)      │
               └───────────────┬──────────────────────────┘
                               │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-        ▼                     ▼                     ▼
-  ┌──────────┐         ┌──────────┐         ┌──────────┐
-  │ Stage 1  │         │ Stage 2  │         │ Stage 4  │
-  │ 09:00 UTC│         │ 10:00 UTC│         │ 12:00 UTC│
-  │Benchmark │         │  Sector  │         │ Holdings │
-  │ ETF (6)  │         │ ETF (10) │         │ (조건부)  │
-  └────┬─────┘         └────┬─────┘         └────┬─────┘
+                              │ [Sequential Trigger]
+                              ▼
+  ┌──────────┐ (1h delay) ┌──────────┐ (Immediate)  ┌──────────┐ (1h delay)
+  │ Stage 1  │ ─────────► │ Stage 2  │ ──────────► │ Stage 3  │ ──────────► ...
+  │ Benchmark│            │  Sector  │             │ Trending │
+  └──────────┘            └──────────┘             └──────────┘
        │                    │                     │
    [DAG] daily_benchmark_etf_collection_dag.py    │
    [Producer] kafka_producer_etf_daily.py         │

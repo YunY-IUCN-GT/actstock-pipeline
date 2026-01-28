@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS 00_collected_meta_etf (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-INSERT INTO 00_collected_meta_etf (ticker, etf_type, sector_name)
+INSERT INTO "00_collected_meta_etf" (ticker, etf_type, sector_name)
 VALUES
     ('SPY', 'benchmark', NULL),
     ('QQQ', 'both', 'Technology'),

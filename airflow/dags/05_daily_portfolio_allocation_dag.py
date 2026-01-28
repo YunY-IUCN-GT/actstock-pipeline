@@ -3,7 +3,7 @@
 
 """
 Airflow DAG - Daily Portfolio Allocation Analysis
-Schedule: Weekdays only, 13:00 UTC (after trending ETF holdings collection at 12:00)
+Schedule: Weekdays only, 23:30 UTC (after trending ETF holdings collection)
 Triggers Spark job to:
   1. Select top 1 best-performing stock from each trending ETF (from top 5 market cap holdings)
   2. Weight by: performance × inverse market cap
@@ -19,6 +19,7 @@ import sys
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 
 sys.path.insert(0, '/opt/airflow/project')
 
@@ -210,19 +211,22 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 2,
-    'retry_delay': timedelta(minutes=10),
+    'retries': 3,
+    'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(
     'daily_portfolio_allocation',
     default_args=default_args,
-    description='Daily portfolio allocation analysis (after all data collections)',
-    schedule_interval='0 13 * * 1-5',  # 13:00 UTC, weekdays only (after 12:00 holdings collection)
+    description='Daily portfolio allocation analysis - Triggered by Controller',
+    schedule_interval=None,  # Controlled by master DAG
     start_date=datetime(2026, 1, 26),
     catchup=False,
-    tags=['analytics', 'portfolio', 'spark', 'scheduled'],
+    tags=['analytics', 'portfolio', 'spark', 'controller-managed'],
+    max_active_runs=1,
 )
+
+# ExternalTaskSensor removed - dependency managed by Controller DAG
 
 # Task 1: Check if weekday
 branch_weekday = BranchPythonOperator(
@@ -251,6 +255,7 @@ run_spark = PythonOperator(
     task_id='run_portfolio_allocator',
     python_callable=run_portfolio_allocator_spark,
     provide_context=True,
+    execution_timeout=timedelta(minutes=20),
     dag=dag,
 )
 

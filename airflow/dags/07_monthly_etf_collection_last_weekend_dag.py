@@ -106,7 +106,7 @@ def collect_all_etf_monthly_data(**context):
                     price_change_pct = 0.0
                 
                 insert_query = """
-                    INSERT INTO 01_collected_daily_etf_ohlc (
+                    INSERT INTO "01_collected_daily_etf_ohlc" (
                         ticker, trade_date, open_price, high_price, low_price,
                         close_price, volume, price_change_percent
                     ) VALUES (

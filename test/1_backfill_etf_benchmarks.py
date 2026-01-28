@@ -21,7 +21,7 @@ from pathlib import Path
 
 # 15 ETF 구성: 6 benchmarks + 10 sectors (QQQ는 both)
 BENCHMARK_ETFS = ['SPY', 'QQQ', 'IWM', 'EWY', 'DIA', 'SCHD']
-SECTOR_ETFS = ['QQQ', 'XLF', 'XLV', 'XLY', 'XLC', 'XLI', 'XLP', 'XLU', 'XLRE', 'XLB']
+SECTOR_ETFS = ['XLK', 'XLF', 'XLV', 'XLY', 'XLC', 'XLI', 'XLP', 'XLU', 'XLRE', 'XLB']
 ALL_ETFS = list(set(BENCHMARK_ETFS + SECTOR_ETFS))  # 15 unique ETFs
 
 # 데이터베이스 연결 정보
@@ -162,7 +162,7 @@ def insert_to_database(data: list):
         for record in data:
             # 중복 체크 후 삽입
             cursor.execute("""
-                INSERT INTO 01_collected_daily_etf_ohlc 
+                INSERT INTO "01_collected_daily_etf_ohlc" 
                 (symbol, date, open, high, low, close, volume, collected_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (symbol, date) DO NOTHING

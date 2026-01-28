@@ -3,7 +3,7 @@
 
 """
 Airflow DAG - Daily Benchmark ETF Data Collection (Group 1)
-Schedule: Weekdays only, 9:00 AM UTC (after US market open)
+Schedule: Weekdays only, 21:30 UTC (after US market close buffer)
 Collects: SPY, QQQ, IWM, EWY, DIA, SCHD (6 benchmark ETFs)
 Note: QQQ also serves as Technology sector representative (total 15 unique ETFs)
 """
@@ -48,25 +48,41 @@ def collect_benchmark_etf_data(**context):
     """
     Collect daily OHLC data for benchmark ETFs via Kafka
     Kafka Pipeline: Producer → etf-daily-data topic → Consumer → PostgreSQL
+    Includes retry logic with exponential backoff for yfinance rate limits
     """
     from collector.kafka_01_producer_etf_daily import ETFDailyDataProducer
     
     logger.info("Starting benchmark ETF data collection (Group 1) via Kafka")
     logger.info("Using Kafka pipeline: Producer → etf-daily-data → Consumer → PostgreSQL")
     
+    # Get task instance for retry info
+    task_instance = context['task_instance']
+    try_number = task_instance.try_number
+    max_tries = task_instance.max_tries
+    
+    # Exponential backoff: increase delay on retries
+    base_delay = 5
+    retry_delay = base_delay * (2 ** (try_number - 1))
+    
+    if try_number > 1:
+        logger.info("Retry attempt %d/%d. Waiting %d seconds due to rate limit...", try_number, max_tries, retry_delay)
+        time.sleep(retry_delay)
+    
     producer = ETFDailyDataProducer()
     
     try:
-        successful_count, failed_count = producer.produce_benchmark_group(delay_seconds=5)
+        successful_count, failed_count = producer.produce_benchmark_group(delay_seconds=retry_delay)
         
         logger.info("=" * 70)
         logger.info("Collection Summary - Benchmark ETFs (Group 1)")
         logger.info("Successful: %d", successful_count)
         logger.info("Failed: %d", failed_count)
         logger.info("Messages sent to Kafka topic: etf-daily-data")
+        logger.info("Attempt %d/%d", try_number, max_tries)
         logger.info("=" * 70)
         
-        if failed_count > successful_count:
+        # Only fail if most symbols failed (allow some failures due to rate limits)
+        if failed_count > (successful_count + failed_count) * 0.7:  # 70% failure threshold
             raise ValueError(f"Too many failures: {failed_count}/{successful_count + failed_count}")
     
     finally:
@@ -79,18 +95,19 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 1,
-    'retry_delay': timedelta(minutes=10),
+    'retries': 3,  # Retry up to 3 times for yfinance rate limits
+    'retry_delay': timedelta(minutes=5),  # Base delay, exponentially increases per retry
 }
 
 with DAG(
     dag_id='daily_benchmark_etf_collection',
     default_args=default_args,
-    description='Daily collection of benchmark ETF data (Group 1) - Weekdays only',
-    schedule_interval='0 9 * * 1-5',  # 9 AM UTC, Monday-Friday
+    description='Daily collection of benchmark ETF data (Group 1) - Triggered by Controller',
+    schedule_interval=None,  # Controlled by master DAG
     start_date=datetime(2026, 1, 26),
     catchup=False,
-    tags=['daily', 'etf', 'benchmark', 'group1', 'weekday-only'],
+    tags=['daily', 'etf', 'benchmark', 'group1', 'controller-managed'],
+    max_active_runs=1,
 ) as dag:
     
     check_weekday = PythonOperator(
@@ -103,7 +120,8 @@ with DAG(
         task_id='collect_benchmark_etf_data',
         python_callable=collect_benchmark_etf_data,
         provide_context=True,
-        execution_timeout=timedelta(minutes=10),
+        execution_timeout=timedelta(minutes=15),  # Allow more time for retries
+        pool='etf_collection',  # Separate pool to avoid overwhelming yfinance
     )
     
     check_weekday >> collect_data

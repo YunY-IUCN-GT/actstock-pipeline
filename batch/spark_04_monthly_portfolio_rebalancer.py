@@ -85,7 +85,7 @@ class MonthlyPortfolioRebalancer:
                     allocation_reason,
                     period_days,
                     as_of_date
-                FROM 05_analytics_portfolio_allocation
+                FROM "05_analytics_portfolio_allocation"
                 WHERE period_days = {period}
                   AND as_of_date = '{as_of_date}'
                 ) AS portfolio_{period}d
@@ -318,7 +318,7 @@ class MonthlyPortfolioRebalancer:
             self.jdbc_url, self.db_user, self.db_password
         ) as conn:
             stmt = conn.createStatement()
-            delete_query = f"DELETE FROM 08_analytics_monthly_portfolio WHERE rebalance_date = '{rebalance_date}'"
+            delete_query = f"DELETE FROM \"08_analytics_monthly_portfolio\" WHERE rebalance_date = '{rebalance_date}'"
             deleted = stmt.executeUpdate(delete_query)
             logger.info(f"기존 데이터 삭제: {deleted}건")
         

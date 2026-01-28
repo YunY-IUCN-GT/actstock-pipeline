@@ -66,9 +66,9 @@ DASHBOARD_CONFIG = {
     "host": os.getenv("DASHBOARD_HOST", "0.0.0.0"),
 }
 
-# 섹터 ETF 매핑 (10개 주요 섹터 ETF - QQQ는 Technology 대표)
+# 섹터 ETF 매핑 (10개 주요 섹터 ETF - XLK는 Technology 대표)
 SECTOR_ETFS = {
-    'Technology': 'QQQ',
+    'Technology': 'XLK',
     'Healthcare': 'XLV',
     'Financial': 'XLF',
     'Consumer Cyclical': 'XLY',
@@ -81,7 +81,8 @@ SECTOR_ETFS = {
 }
 
 # 벤치마크 티커 (6개 - 시장 전체 지표 + 국가 + 배당)
-# 주의: QQQ는 섹터 ETF에도 포함되므로 총 15개 unique ETF
+# QQQ는 벤치마크 전용 (섹터 ETF는 XLK 사용)
+# 총 16개 unique ETF (벤치마크 6개 + 섹터 10개)
 BENCHMARK_TICKERS = ['SPY', 'QQQ', 'IWM', 'EWY', 'DIA', 'SCHD']
 
 # 섹터 ETF 티커 리스트 (10개)

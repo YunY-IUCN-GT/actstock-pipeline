@@ -17,7 +17,7 @@ import time
 import argparse
 
 # 섹터 ETF 리스트
-SECTOR_ETFS = ['QQQ', 'XLF', 'XLV', 'XLY', 'XLC', 'XLI', 'XLP', 'XLU', 'XLRE', 'XLB']
+SECTOR_ETFS = ['XLK', 'XLF', 'XLV', 'XLY', 'XLC', 'XLI', 'XLP', 'XLU', 'XLRE', 'XLB']
 
 # 데이터베이스 연결 정보
 DB_CONFIG = {
@@ -66,7 +66,7 @@ def fetch_and_insert_etf(symbol: str, days: int, delay: int = 5):
         
         for date, row in hist.iterrows():
             cursor.execute("""
-                INSERT INTO 01_collected_daily_etf_ohlc 
+                INSERT INTO "01_collected_daily_etf_ohlc" 
                 (symbol, date, open, high, low, close, volume, collected_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (symbol, date) DO NOTHING

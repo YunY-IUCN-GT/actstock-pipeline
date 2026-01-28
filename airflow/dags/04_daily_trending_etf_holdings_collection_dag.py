@@ -3,8 +3,8 @@
 
 """
 Airflow DAG - Daily Trending ETF Holdings Collection
-Schedule: Weekdays only, 12:00 UTC (after trending ETF identification)
-Depends on: daily_trending_etf_analysis (11:00)
+Schedule: Weekdays only, 23:00 UTC (after trending ETF identification)
+Depends on: daily_trending_etf_analysis
 Only collects holdings for ETFs identified as trending
 """
 
@@ -16,6 +16,7 @@ import sys
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.sensors.external_task import ExternalTaskSensor
 
 sys.path.insert(0, '/opt/airflow/project')
 
@@ -164,19 +165,22 @@ default_args = {
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
-    'retries': 1,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5),
 }
 
 dag = DAG(
     'daily_trending_etf_holdings_collection',
     default_args=default_args,
-    description='Collect holdings + stock data for trending ETFs only (conditional)',
-    schedule_interval='0 12 * * 1-5',  # 12:00 UTC, weekdays only
+    description='Collect holdings + stock data - Triggered by Controller',
+    schedule_interval=None,  # Controlled by master DAG
     start_date=datetime(2026, 1, 26),
     catchup=False,
-    tags=['collection', 'holdings', 'conditional', 'trending', 'scheduled'],
+    tags=['collection', 'holdings', 'conditional', 'trending', 'controller-managed'],
+    max_active_runs=1,
 )
+
+# ExternalTaskSensor removed - dependency managed by Controller DAG
 
 # Task 1: Check if weekday
 branch_weekday = BranchPythonOperator(
@@ -205,6 +209,8 @@ collect_holdings = PythonOperator(
     task_id='run_holdings_collection',
     python_callable=run_holdings_collection,
     provide_context=True,
+    execution_timeout=timedelta(minutes=30),
+    pool='etf_collection',
     dag=dag,
 )
 

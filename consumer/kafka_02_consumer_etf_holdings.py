@@ -80,7 +80,7 @@ class ETFHoldingsConsumer:
             
             # Insert query with conflict handling
             insert_query = """
-                INSERT INTO 04_collected_etf_holdings (
+                INSERT INTO "04_collected_etf_holdings" (
                     etf_ticker,
                     holding_ticker,
                     holding_name,

@@ -75,8 +75,8 @@ class TrendingETFIdentifier:
                 e.close_price,
                 m.etf_type,
                 m.sector_name
-            FROM 01_collected_daily_etf_ohlc e
-            LEFT JOIN 00_collected_meta_etf m ON e.ticker = m.ticker
+            FROM "01_collected_daily_etf_ohlc" e
+            LEFT JOIN "00_collected_meta_etf" m ON e.ticker = m.ticker
             WHERE e.trade_date >= '{cutoff_date}'
             ORDER BY e.ticker, e.trade_date
         ) as etf_data"""
@@ -214,7 +214,7 @@ class TrendingETFIdentifier:
         
         for _, row in trending_pd.iterrows():
             upsert_query = """
-                INSERT INTO 03_analytics_trending_etfs (
+                INSERT INTO "03_analytics_trending_etfs" (
                     as_of_date, ticker, etf_type, sector_name,
                     return_pct, spy_return, is_trending, analysis_period_days
                 ) VALUES (
