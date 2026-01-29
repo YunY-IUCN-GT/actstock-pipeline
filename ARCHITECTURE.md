@@ -4,9 +4,23 @@
 
 ---
 
+## ✅ 설계 문서 최종 정리
+
+본 문서는 프로젝트 전 기간의 설계 결정을 통합한 최종 버전입니다. 핵심 설계 원칙과 구성은 아래와 같습니다.
+
+### 핵심 설계 원칙
+- **배치 전용 수집**: yfinance rate limit 대응을 위해 실시간/스트리밍 수집을 금지합니다.
+- **Controller 패턴**: `daily_pipeline_controller`가 Stage 간 지연과 실행 순서를 중앙 제어합니다.
+- **분리형 파이프라인**: 수집(Kafka)과 분석(Spark)을 분리하여 운영 안정성과 재처리를 확보합니다.
+- **명명 규칙 준수**: Collected/Analytics 레이어 기준으로 테이블 명명 규칙을 유지합니다.
+- **단일 저장소**: PostgreSQL을 기준 저장소로 사용하여 API/대시보드와 일관된 데이터 계약을 보장합니다.
+
+### 최종 파이프라인 구성도
+아래의 5-Stage Daily 파이프라인과 Monthly Rebalance 흐름이 최종 설계입니다.
+
 ## 📐 아키텍처 다이어그램
 
-### 전체 시스템 구조 (5-Stage Pipeline + Monthly Rebalance)
+### 전체 시스템 구조 (5-Stage Pipeline + Monthly Rebalance, Final)
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -15,13 +29,13 @@
                                     │
                                     ▼
                ┌──────────────────────────────────────────┐
-               │           Controller DAG                 │
-               │      매일 21:30 UTC (장 마감)            │
+               │           Controller Service             │
+               │   장 종료 후 30분 1회 실행 (Daily)        │
                └───────────────┬──────────────────────────┘
                                │
                                │ [순차적 실행 트리거]
                                ▼
-   ┌──────────┐ (1시간 지연) ┌──────────┐ (즉시 실행)  ┌──────────┐ (1시간 지연)
+   ┌──────────┐ (컨트롤러 지연) ┌──────────┐ (컨트롤러 지연) ┌──────────┐ (컨트롤러 지연)
    │ Stage 1  │ ──────────► │ Stage 2  │ ──────────► │ Stage 3  │ ──────────► ...
    │ 벤치마크 │             │  섹터    │             │ 트렌딩   │
    └──────────┘             └──────────┘             └──────────┘
@@ -61,7 +75,6 @@
                   ▼                     ▼
            ┌───────────┐         ┌───────────┐
            │  Stage 3  │         │  Stage 5  │
-           │ 11:00 UTC │         │ 13:00 UTC │
            │ 트렌딩 ETF│         │ 포트폴리오│
            │   분석    │         │(5d/10d/20d)│
            │           │         │   배분    │
@@ -124,39 +137,39 @@
 - 모든 데이터는 Airflow 스케줄러에 의한 배치 수집만 사용
 - Kafka는 배치 데이터 파이프라인 용도로만 사용 (스트리밍 아님)
 
-**수집 방식**: **Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL**
+**수집 방식**: **Controller → Airflow DAG Trigger → Kafka Producer → Kafka Topic → Consumer → PostgreSQL**
 - 수집 이력 로그 보관
 - 재처리 가능
 - 모니터링 용이
-- 스케줄: 월-금 09:00-13:00 (5 stages) + 매월 마지막 일요일 14:00 (rebalance)
+- 스케줄: 월-금 장 종료 후 30분 1회 (5 stages 순차 실행) + 매월 마지막 일요일 14:00 (rebalance)
 
 ### 5-Stage Pipeline 상세 (월-금 Daily)
 
 ```
-09:00 UTC → Stage 1: 벤치마크 ETF OHLC (6개)
+T+0 (장 종료 후 30분) → Stage 1: 벤치마크 ETF OHLC (6개)
               ├─ SPY, QQQ, IWM, EWY, DIA, SCHD
               ├─ Note: QQQ는 Technology 섹터 대표로도 사용 (총 15 unique)
               └─ Kafka: Airflow → Producer → etf-daily-data → Consumer → PostgreSQL
               
-10:00 UTC → Stage 2: 섹터 ETF OHLC (10개)
+T+Δ1 → Stage 2: 섹터 ETF OHLC (10개)
               ├─ QQQ, XLF, XLV, XLY, XLC, XLI, XLP, XLU, XLRE, XLB
               ├─ Technology(QQQ), Financial, Healthcare, Consumer Cyclical,
               │  Communication, Industrial, Consumer Defensive, Utilities,
               │  Real Estate, Basic Materials
               └─ Kafka: Airflow → Producer → etf-daily-data → Consumer → PostgreSQL
               
-11:00 UTC → Stage 3: 트렌딩 ETF 식별 (Spark)
+T+Δ2 → Stage 3: 트렌딩 ETF 식별 (Spark)
               ├─ Read: collected_01_daily_etf_ohlc
-              ├─ Logic: return_pct > SPY_return AND > 0%
-              └─ Write: analytics_03_trending_etfs
+              ├─ Logic (20일 기준): return_pct > SPY_return AND > 0%
+              └─ Write: analytics_03_trending_etfs (period=20)
               
-12:00 UTC → Stage 4: 조건부 Holdings 수집 (Kafka)
+T+Δ3 → Stage 4: 조건부 Holdings 수집 (Kafka)
               ├─ Read: analytics_03_trending_etfs (trending만 선택)
               ├─ Collect: 트렌딩 ETF의 top 5 holdings만
               ├─ Write: collected_04_etf_holdings
               └─ Write: collected_06_daily_stock_history
 
-13:00 UTC → Stage 5: 멀티기간 포트폴리오 배분 (Spark)
+T+Δ4 → Stage 5: 멀티기간 포트폴리오 배분 (Spark)
               ├─ Read: analytics_03_trending_etfs, collected_04_etf_holdings
               ├─ Logic: TOP 1 performer per ETF, Weight = Perf × (1/MCap)
               ├─ Periods: 5d, 10d, 20d (3개 독립 포트폴리오)
@@ -171,11 +184,11 @@
 
 ### 핵심 원칙
 
-**5-Stage 스케줄 배치 파이프라인**
-- Stage 1-2: ETF OHLC 수집 (09:00, 10:00)
-- Stage 3: 트렌딩 ETF 분석 (11:00 Spark)
-- Stage 4: 조건부 Holdings 수집 (12:00)
-- Stage 5: 포트폴리오 배분 (13:00 Spark)
+**5-Stage 배치 파이프라인 (Controller 순차 실행)**
+- Stage 1-2: ETF OHLC 수집 (컨트롤러 트리거)
+- Stage 3: 트렌딩 ETF 분석 (Spark)
+- Stage 4: 조건부 Holdings 수집
+- Stage 5: 포트폴리오 배분 (Spark)
 
 ### 수집 방식
 
@@ -188,7 +201,7 @@ Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
   - 재처리 가능
   - 모니터링 용이
   - 데이터 파이프라인 표준 패턴
-- **스케줄**: 월-금 5-stage workflow
+- **스케줄**: 월-금 장 종료 후 30분 1회 (컨트롤러가 Stage 순차 실행)
 
 **⚠️ 절대 금지**: 
 - ❌ 실시간(real-time) 수집
@@ -196,27 +209,27 @@ Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
 - ❌ 시간별(hourly) 자동 수집
 - ✅ Airflow 스케줄러에 의한 배치 수집만 사용 (yfinance rate limit 회피)
 
-### Stage 1 & 2: ETF OHLC 수집 (09:00, 10:00 UTC)
+### Stage 1 & 2: ETF OHLC 수집 (컨트롤러 트리거)
 
-#### Stage 1: 벤치마크 ETF (09:00 UTC)
+#### Stage 1: 벤치마크 ETF (컨트롤러 시작 시점)
 **DAG**: `01_daily_benchmark_etf_collection_dag.py`
 - **대상**: SPY, QQQ, IWM, EWY, DIA, SCHD (6개)
-- **실행**: 월-금 09:00 UTC (주 5회)
+- **실행**: 월-금 장 종료 후 30분 1회 (컨트롤러 트리거)
 - **방식**: Airflow → Kafka Producer (`kafka_01_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_01_consumer_etf_daily.py`) → PostgreSQL
 - **Rate Limit**: 5초 간격
 - **저장**: `collected_01_daily_etf_ohlc`
 
-#### Stage 2: 섹터 ETF (10:00 UTC)
+#### Stage 2: 섹터 ETF (Stage 1 이후)
 **DAG**: `02_daily_sector_etf_collection_dag.py`
 - **대상**: QQQ, XLV, XLF, XLY, XLC, XLI, XLP, XLU, XLRE, XLB (10개)
 - **섹터**: Technology, Healthcare, Financial, Consumer Cyclical, Communication, Industrial, Consumer Defensive, Utilities, Real Estate, Basic Materials
-- **실행**: 월-금 10:00 UTC (주 5회)
+- **실행**: 월-금 장 종료 후 30분 1회 (컨트롤러 트리거)
 - **방식**: Airflow → Kafka Producer (`kafka_01_producer_etf_daily.py`) → `etf-daily-data` → Consumer (`kafka_01_consumer_etf_daily.py`) → PostgreSQL
 - **Rate Limit**: 5초 간격
 - **저장**: `collected_01_daily_etf_ohlc`
 - **Note**: QQQ는 Stage 1 벤치마크에도 포함되어 총 15개 unique ETF
 
-### Stage 3: 트렌딩 ETF 분석 (11:00 UTC)
+### Stage 3: 트렌딩 ETF 분석 (컨트롤러 트리거)
 
 **Spark Job**: `spark_01_trending_etf_identifier.py`
 - **입력**: `collected_01_daily_etf_ohlc` (Stage 1, 2 결과)
@@ -227,7 +240,7 @@ Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
 - **출력**: `analytics_03_trending_etfs`
 - **용도**: Stage 4에서 수집할 ETF 결정
 
-### Stage 4: 조건부 Holdings 수집 (12:00 UTC)
+### Stage 4: 조건부 Holdings 수집 (컨트롤러 트리거)
 
 **DAG**: `04_daily_trending_etf_holdings_collection_dag.py`
 - **조건**: `analytics_03_trending_etfs`에서 `is_trending = TRUE`인 ETF만
@@ -238,7 +251,7 @@ Airflow DAG → Kafka Producer → Kafka Topic → Consumer → PostgreSQL
   - `collected_06_daily_stock_history` (종목 OHLC) via `kafka_03_consumer_stock_daily.py`
 - **효율성**: 전체 수집 대비 ~97% API 호출 감소
 
-### Stage 5: 포트폴리오 배분 (13:00 UTC)
+### Stage 5: 포트폴리오 배분 (컨트롤러 트리거)
 
 **Spark Job**: `spark_02_active_stock_allocator.py`
 - **입력**: 
@@ -256,7 +269,7 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
 
 ### Spark Batch Jobs
 
-#### 1. Trending ETF Identifier (매일 11:00 UTC - Stage 3)
+#### 1. Trending ETF Identifier (매일 1회 - Stage 3)
 **파일**: `batch/spark_01_trending_etf_identifier.py`  
 **트리거**: `airflow/dags/03_daily_trending_etf_analysis_dag.py`
 
@@ -267,19 +280,19 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
 1. Load ETF OHLC data (collected_01_daily_etf_ohlc)
    └─ Last 20 trading days
 
-2. Calculate returns for each period (5d, 10d, 20d)
-   ├─ SPY baseline return
-   ├─ Each ETF return
-   └─ Outperformance = ETF_return - SPY_return
+2. Calculate 20-day returns
+    ├─ SPY baseline return
+    ├─ Each ETF return
+    └─ Outperformance = ETF_return - SPY_return
 
 3. Identify trending ETFs
    └─ Condition: outperformance > 0 AND is_trending = TRUE
 
 4. Save results
-   └─ analytics_03_trending_etfs (etf_ticker, return_Xd, spy_return_Xd, outperformance, is_trending)
+    └─ analytics_03_trending_etfs (etf_ticker, return_pct, spy_return, is_trending, period=20)
 ```
 
-#### 2. Portfolio Allocator (매일 13:00 UTC - Stage 5)
+#### 2. Portfolio Allocator (매일 1회 - Stage 5)
 **파일**: `batch/spark_02_active_stock_allocator.py`  
 **트리거**: `airflow/dags/05_daily_portfolio_allocation_dag.py`
 
@@ -333,9 +346,8 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
    └─ Normalize to sum = 1.0 (100%)
 
 5. Save final monthly portfolio
-   └─ analytics_08_monthly_portfolio (rebalance_date, valid_until, final_rank, final_weight, score, source_periods)
+    └─ analytics_08_monthly_portfolio (rebalance_date, valid_until, final_rank, final_weight, score, source_periods)
 ```
-- 결과: `analytics_sector_trending`
 
 ---
 
@@ -346,7 +358,7 @@ Spark가 수집 데이터를 읽어 분석 결과를 생성
 ### Collected (수집 계층 - Kafka Consumer가 저장, Airflow 스케줄 기반)
 
 ```sql
--- 일별 주식 히스토리 (Stage 4, 월-금 12:00 UTC)
+-- 일별 주식 히스토리 (Stage 4, 월-금 장 종료 후 30분 1회)
 collected_06_daily_stock_history (
     ticker VARCHAR,
     trade_date DATE,
@@ -356,7 +368,7 @@ collected_06_daily_stock_history (
     UNIQUE(ticker, trade_date)
 )
 
--- ETF 메타데이터 + 보유종목 (etf_holdings_daily_dag, 월-금 09:00 UTC)
+-- ETF 메타데이터 + 보유종목 (etf_holdings_daily_dag, 월-금 장 종료 후 30분 1회)
 collected_00_meta_etf (
     ticker VARCHAR PRIMARY KEY,
     etf_type VARCHAR,

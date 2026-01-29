@@ -17,9 +17,16 @@ from database.db_helper import DatabaseHelper
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
+# Benchmark ETF tickers to always include in multi-period views
+BENCHMARK_TICKERS = ("SPY", "QQQ", "IWM", "DIA", "EWY", "SCHD")
+BENCHMARK_PRIORITY = ("QQQ", "SPY", "IWM", "DIA", "EWY", "SCHD")
+
 
 @router.get("/etf-holdings")
-async def get_etf_holdings_data(days: int = Query(60, ge=1, le=365)):
+async def get_etf_holdings_data(
+    days: int = Query(60, ge=1, le=365),
+    ticker: Optional[str] = Query(None, description="Optional stock ticker filter")
+):
     """
     ETF Holdings 일별 성과 데이터 조회
     
@@ -37,10 +44,16 @@ async def get_etf_holdings_data(days: int = Query(60, ge=1, le=365)):
             close_price, price_change_percent, volume, market_cap
         FROM collected_06_daily_stock_history
         WHERE trade_date >= CURRENT_DATE - INTERVAL '%s days'
-        ORDER BY trade_date DESC, ticker
     """
+
+    params = [days]
+    if ticker:
+        query += " AND ticker = %s"
+        params.append(ticker.upper())
+
+    query += " ORDER BY trade_date DESC, ticker"
     
-    results = db.fetch_all(query, (days,))
+    results = db.fetch_all(query, params)
     
     if not results:
         return []
@@ -260,7 +273,7 @@ async def get_monthly_performance(months: int = Query(12, ge=1, le=24)):
                     ORDER BY trade_date
                     RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
                 ) as month_close
-            FROM 01_collected_daily_etf_ohlc
+            FROM collected_01_daily_etf_ohlc
             WHERE trade_date >= CURRENT_DATE - INTERVAL '%s months'
         )
         SELECT DISTINCT
@@ -382,6 +395,323 @@ async def get_top_performers(
             row['latest_date'] = row['latest_date'].isoformat()
     
     return results
+
+
+@router.get("/top-performers-by-sector")
+async def get_top_performers_by_sector(
+    sector: str = Query(..., description="Sector name (e.g., Financial, Technology)"),
+    limit: int = Query(2, ge=1, le=10),
+    window_days: int = Query(5, ge=1, le=30)
+):
+    """
+    섹터별 최고 성과 종목 조회
+    
+    Args:
+        sector: 섹터명
+        limit: 반환할 종목 수 (기본값: 2)
+        window_days: 계산 기간 (기본값: 5일)
+    
+    Returns:
+        Top performing stocks in the sector
+    """
+    db = DatabaseHelper()
+    
+    query = """
+        WITH date_range AS (
+            SELECT 
+                CURRENT_DATE as end_date,
+                CURRENT_DATE - INTERVAL '%s days' as start_date
+        ),
+        stock_prices AS (
+            SELECT 
+                s.ticker,
+                s.company_name,
+                s.sector,
+                s.trade_date,
+                s.close_price,
+                ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date) as rn_start,
+                ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date DESC) as rn_end
+            FROM collected_06_daily_stock_history s, date_range dr
+            WHERE s.trade_date BETWEEN dr.start_date AND dr.end_date
+              AND s.sector = %s
+        ),
+        stock_returns AS (
+            SELECT 
+                start_prices.ticker,
+                start_prices.company_name,
+                start_prices.sector,
+                start_prices.close_price as start_price,
+                end_prices.close_price as end_price,
+                end_prices.trade_date as latest_date,
+                ((end_prices.close_price - start_prices.close_price) / start_prices.close_price * 100) as return_pct
+            FROM 
+                (SELECT * FROM stock_prices WHERE rn_start = 1) start_prices
+            JOIN 
+                (SELECT * FROM stock_prices WHERE rn_end = 1) end_prices
+            ON start_prices.ticker = end_prices.ticker
+            WHERE start_prices.close_price > 0
+        )
+        SELECT 
+            ticker,
+            company_name,
+            sector,
+            start_price,
+            end_price as latest_price,
+            return_pct,
+            latest_date
+        FROM stock_returns
+        ORDER BY return_pct DESC
+        LIMIT %s
+    """
+    
+    results = db.fetch_all(query, (window_days, sector, limit))
+    
+    if not results:
+        return []
+    
+    for row in results:
+        if isinstance(row.get('latest_date'), date):
+            row['latest_date'] = row['latest_date'].isoformat()
+    
+    return results
+
+
+@router.get("/trending-etf-top-holdings")
+async def get_trending_etf_top_holdings(
+    period_days: int = Query(20, ge=5, le=20),
+    limit: int = Query(5, ge=1, le=20)
+):
+    """
+    트렌딩 ETF 기준 상위 보유 종목 조회
+    
+    Args:
+        period_days: ETF 수익률 계산 기간 (5, 10, 20)
+        limit: 반환할 종목 수
+    
+    Returns:
+        ETF별 상위 보유 종목과 포트폴리오 후보
+    """
+    db = DatabaseHelper()
+
+    benchmark_in = "('" + "','".join(BENCHMARK_TICKERS) + "')"
+    query = f"""
+        WITH date_range AS (
+            SELECT 
+                CURRENT_DATE as end_date,
+                CURRENT_DATE - INTERVAL '%s days' as start_date
+        ),
+        etf_prices AS (
+            SELECT 
+                o.ticker,
+                o.trade_date,
+                o.close_price,
+                ROW_NUMBER() OVER (PARTITION BY o.ticker ORDER BY o.trade_date) as rn_start,
+                ROW_NUMBER() OVER (PARTITION BY o.ticker ORDER BY o.trade_date DESC) as rn_end
+            FROM collected_01_daily_etf_ohlc o, date_range dr
+            WHERE o.trade_date BETWEEN dr.start_date AND dr.end_date
+        ),
+        etf_returns AS (
+            SELECT 
+                s.ticker,
+                s.close_price as start_price,
+                e.close_price as end_price,
+                ((e.close_price - s.close_price) / s.close_price * 100) as return_pct
+            FROM (SELECT * FROM etf_prices WHERE rn_start = 1) s
+            JOIN (SELECT * FROM etf_prices WHERE rn_end = 1) e
+            ON s.ticker = e.ticker
+            WHERE s.close_price > 0
+        ),
+        spy AS (
+            SELECT return_pct as spy_return
+            FROM etf_returns
+            WHERE ticker = 'SPY'
+        ),
+        target_etfs AS (
+            SELECT 
+                er.ticker,
+                er.return_pct,
+                CASE WHEN er.ticker IN {benchmark_in} THEN true ELSE false END as is_benchmark,
+                CASE 
+                    WHEN er.ticker <> 'SPY'
+                     AND er.return_pct > COALESCE(sp.spy_return, 0)
+                     AND er.return_pct > 0
+                    THEN true ELSE false
+                END as is_trending
+            FROM etf_returns er
+            LEFT JOIN spy sp ON true
+            WHERE er.ticker IN {benchmark_in}
+               OR (er.ticker <> 'SPY'
+                   AND er.return_pct > COALESCE(sp.spy_return, 0)
+                   AND er.return_pct > 0)
+        ),
+        latest_holdings AS (
+            SELECT h.*
+            FROM collected_04_etf_holdings h
+            JOIN (
+                SELECT etf_ticker, MAX(as_of_date) as as_of_date
+                FROM collected_04_etf_holdings
+                GROUP BY etf_ticker
+            ) m
+            ON h.etf_ticker = m.etf_ticker
+           AND h.as_of_date = m.as_of_date
+        ),
+        latest_market_cap AS (
+            SELECT DISTINCT ON (s.ticker)
+                s.ticker,
+                s.company_name,
+                s.market_cap,
+                s.trade_date
+            FROM collected_06_daily_stock_history s, date_range dr
+            WHERE s.trade_date BETWEEN dr.start_date AND dr.end_date
+            ORDER BY s.ticker, s.trade_date DESC
+        ),
+        holdings_ranked AS (
+            SELECT 
+                t.ticker as etf_ticker,
+                t.return_pct as etf_return_pct,
+                t.is_benchmark,
+                t.is_trending,
+                lh.holding_ticker,
+                COALESCE(lh.holding_name, mc.company_name) as holding_name,
+                mc.market_cap,
+                mc.trade_date,
+                lh.as_of_date,
+                ROW_NUMBER() OVER (
+                    PARTITION BY t.ticker 
+                    ORDER BY mc.market_cap DESC NULLS LAST
+                ) as mcap_rank
+            FROM target_etfs t
+            JOIN latest_holdings lh
+              ON lh.etf_ticker = t.ticker
+            LEFT JOIN latest_market_cap mc
+              ON mc.ticker = lh.holding_ticker
+        ),
+        stock_prices AS (
+            SELECT 
+                s.ticker,
+                s.trade_date,
+                s.close_price,
+                ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date) as rn_start,
+                ROW_NUMBER() OVER (PARTITION BY s.ticker ORDER BY s.trade_date DESC) as rn_end
+            FROM collected_06_daily_stock_history s, date_range dr
+            WHERE s.trade_date BETWEEN dr.start_date AND dr.end_date
+        ),
+        stock_returns AS (
+            SELECT 
+                s.ticker,
+                s.close_price as start_price,
+                e.close_price as end_price,
+                ((e.close_price - s.close_price) / s.close_price * 100) as return_pct
+            FROM (SELECT * FROM stock_prices WHERE rn_start = 1) s
+            JOIN (SELECT * FROM stock_prices WHERE rn_end = 1) e
+            ON s.ticker = e.ticker
+            WHERE s.close_price > 0
+        )
+        SELECT 
+            hr.etf_ticker,
+            hr.etf_return_pct,
+            hr.is_benchmark,
+            hr.is_trending,
+            hr.holding_ticker,
+            hr.holding_name,
+            hr.market_cap,
+            hr.trade_date,
+            hr.as_of_date,
+            hr.mcap_rank,
+            sr.return_pct as holding_return_pct
+        FROM holdings_ranked hr
+        LEFT JOIN stock_returns sr
+          ON sr.ticker = hr.holding_ticker
+        WHERE hr.mcap_rank <= %s
+        ORDER BY hr.is_benchmark DESC, hr.etf_return_pct DESC NULLS LAST, hr.etf_ticker, hr.mcap_rank
+    """
+
+    results = db.fetch_all(query, (period_days, limit))
+
+    if not results:
+        return {
+            "period_days": period_days,
+            "etfs": [],
+            "portfolio_pick": None
+        }
+
+    etf_map: Dict[str, Dict[str, Any]] = {}
+    benchmark_holdings = []
+    trending_holdings = []
+
+    for row in results:
+        if isinstance(row.get('as_of_date'), date):
+            row['as_of_date'] = row['as_of_date'].isoformat()
+        if isinstance(row.get('trade_date'), date):
+            row['trade_date'] = row['trade_date'].isoformat()
+
+        etf_ticker = row.get('etf_ticker')
+        if etf_ticker not in etf_map:
+            etf_map[etf_ticker] = {
+                "etf_ticker": etf_ticker,
+                "etf_return_pct": float(row.get('etf_return_pct') or 0),
+                "is_benchmark": bool(row.get('is_benchmark')),
+                "is_trending": bool(row.get('is_trending')),
+                "holdings": []
+            }
+
+        holding = {
+            "holding_ticker": row.get('holding_ticker'),
+            "holding_name": row.get('holding_name'),
+            "market_cap": row.get('market_cap'),
+            "holding_return_pct": row.get('holding_return_pct'),
+            "mcap_rank": row.get('mcap_rank')
+        }
+        etf_map[etf_ticker]["holdings"].append(holding)
+
+        if row.get('is_benchmark'):
+            benchmark_holdings.append({**holding, "etf_ticker": etf_ticker})
+        if row.get('is_trending'):
+            trending_holdings.append({**holding, "etf_ticker": etf_ticker, "etf_return_pct": row.get('etf_return_pct')})
+
+    # Determine portfolio pick: best performer among top holdings of trending ETFs
+    portfolio_pick = None
+    trending_candidates = [
+        h for h in trending_holdings
+        if h.get("holding_return_pct") is not None
+    ]
+    if trending_candidates:
+        trending_candidates.sort(
+            key=lambda h: (float(h.get("holding_return_pct") or 0), float(h.get("market_cap") or 0)),
+            reverse=True
+        )
+        portfolio_pick = trending_candidates[0]
+
+        # If the portfolio pick is in any benchmark ETF top-5, prefer benchmark for display
+        benchmark_match = [
+            b for b in benchmark_holdings
+            if b.get("holding_ticker") == portfolio_pick.get("holding_ticker")
+        ]
+        if benchmark_match:
+            benchmark_match.sort(
+                key=lambda b: (
+                    BENCHMARK_PRIORITY.index(b.get("etf_ticker")) if b.get("etf_ticker") in BENCHMARK_PRIORITY else 999
+                )
+            )
+            preferred = benchmark_match[0]
+            portfolio_pick["source_etf"] = preferred.get("etf_ticker")
+            portfolio_pick["source_type"] = "benchmark"
+        else:
+            portfolio_pick["source_etf"] = portfolio_pick.get("etf_ticker")
+            portfolio_pick["source_type"] = "trending"
+
+    # Normalize holdings ordering
+    for etf in etf_map.values():
+        etf["holdings"] = sorted(etf["holdings"], key=lambda h: h.get("mcap_rank") or 999)
+
+    etfs = list(etf_map.values())
+    etfs.sort(key=lambda e: (0 if e.get("is_benchmark") else 1, -(e.get("etf_return_pct") or 0)))
+
+    return {
+        "period_days": period_days,
+        "etfs": etfs,
+        "portfolio_pick": portfolio_pick
+    }
 
 
 @router.get("/etf-list")

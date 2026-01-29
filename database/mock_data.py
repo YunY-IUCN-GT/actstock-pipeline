@@ -6,11 +6,41 @@ import os
 import psycopg2
 from datetime import datetime, timedelta
 import random
+import re
 
 # Add project root to sys.path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.config import DB_CONFIG, BENCHMARK_TICKERS, SECTOR_ETFS
+
+TICKER_RE = re.compile(r"^[A-Z0-9\.\-]{1,10}$")
+
+
+def _validate_ticker(ticker: str):
+    if not ticker or not TICKER_RE.match(ticker):
+        raise ValueError(f"Invalid ticker: {ticker}")
+
+
+ETF_TOP_HOLDINGS = {
+    # Benchmarks
+    "SPY": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"],
+    "QQQ": ["AAPL", "MSFT", "NVDA", "AMZN", "META"],
+    "IWM": ["SMCI", "RBLX", "CROX", "FND", "PTC"],
+    "DIA": ["MSFT", "AAPL", "UNH", "HD", "JNJ"],
+    "EWY": ["KB", "PKX", "SKM", "KT", "LPL"],
+    "SCHD": ["KO", "PEP", "PG", "VZ", "TXN"],
+    # Sector ETFs
+    "XLK": ["AAPL", "MSFT", "NVDA", "AVGO", "ORCL"],
+    "XLV": ["UNH", "JNJ", "LLY", "ABBV", "MRK"],
+    "XLF": ["JPM", "BAC", "WFC", "MS", "GS"],
+    "XLY": ["AMZN", "TSLA", "HD", "MCD", "NKE"],
+    "XLC": ["META", "GOOGL", "NFLX", "TMUS", "DIS"],
+    "XLI": ["GE", "CAT", "RTX", "HON", "UNP"],
+    "XLP": ["PG", "KO", "PEP", "WMT", "COST"],
+    "XLU": ["NEE", "DUK", "SO", "AEP", "EXC"],
+    "XLRE": ["AMT", "PLD", "EQIX", "SPG", "O"],
+    "XLB": ["LIN", "SHW", "APD", "FCX", "NEM"],
+}
 
 def generate_mock_data():
     conn = psycopg2.connect(**DB_CONFIG)
@@ -46,22 +76,21 @@ def generate_mock_data():
                 ON CONFLICT (ticker, trade_date) DO NOTHING
             """, (ticker, date, old_price, max(old_price, price) * 1.01, min(old_price, price) * 0.99, price, random.randint(1000000, 10000000), change))
             
-    # 2. Mock collected_04_etf_holdings (Top 5 for trending ETFs)
-    trending_etfs = ['XLK', 'QQQ', 'XLY']
-    holdings_per_etf = {
-        'XLK': [('AAPL', 'Apple Inc.'), ('MSFT', 'Microsoft Corp.'), ('NVDA', 'NVIDIA Corp.'), ('AVGO', 'Broadcom Inc.'), ('ORCL', 'Oracle Corp.')],
-        'QQQ': [('AAPL', 'Apple Inc.'), ('MSFT', 'Microsoft Corp.'), ('AMZN', 'Amazon.com Inc.'), ('META', 'Meta Platforms Inc.'), ('GOOGL', 'Alphabet Inc.')],
-        'XLY': [('AMZN', 'Amazon.com Inc.'), ('TSLA', 'Tesla Inc.'), ('HD', 'Home Depot Inc.'), ('MCD', "McDonald's Corp."), ('NKE', 'Nike Inc.')]
-    }
-    
-    # Also add some for everything else just in case
-    for t in [t for t in tickers if t not in trending_etfs]:
-        holdings_per_etf[t] = [('STOCK1', 'Stock One'), ('STOCK2', 'Stock Two'), ('STOCK3', 'Stock Three'), ('STOCK4', 'Stock Four'), ('STOCK5', 'Stock Five')]
+    # 2. Mock collected_04_etf_holdings (Top 5 per ETF)
+    holdings_per_etf = {}
+
+    for etf_ticker in tickers:
+        top_list = ETF_TOP_HOLDINGS.get(etf_ticker)
+        if not top_list:
+            # Fallback to a safe, valid set of large-cap tickers
+            top_list = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL"]
+        holdings_per_etf[etf_ticker] = [(t, t) for t in top_list]
 
     print("Seeding holdings and stock history...")
     all_stocks = set()
     for etf, stocks in holdings_per_etf.items():
         for i, (ticker, name) in enumerate(stocks):
+            _validate_ticker(ticker)
             all_stocks.add((ticker, name))
             cur.execute("""
                 INSERT INTO collected_04_etf_holdings 
@@ -72,6 +101,7 @@ def generate_mock_data():
 
     # 3. Mock collected_06_daily_stock_history
     for ticker, name in all_stocks:
+        _validate_ticker(ticker)
         price = random.uniform(10, 1000)
         sector = "Technology" if ticker in ['AAPL', 'MSFT', 'NVDA', 'AVGO', 'ORCL', 'AMZN', 'META', 'GOOGL'] else "Other"
         for i in range(days):

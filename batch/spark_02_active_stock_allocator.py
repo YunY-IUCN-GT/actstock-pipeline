@@ -28,6 +28,14 @@ from utils.logging_utils import setup_logger
 
 LOG = setup_logger(__name__, "spark-portfolio-allocator.log")
 
+# Exclude known placeholder tickers from mock data
+EXCLUDE_TICKER_REGEX = os.getenv("EXCLUDE_TICKER_REGEX", r"(?i)^STOCK\\d+$")
+EXCLUDE_COMPANY_PREFIXES = [
+    p.strip().upper()
+    for p in os.getenv("EXCLUDE_COMPANY_PREFIXES", "STOCK ").split(",")
+    if p.strip()
+]
+
 
 class ActiveStockAllocator:
     """Calculate trending sectors, stocks, and portfolio allocation"""
@@ -158,9 +166,19 @@ class ActiveStockAllocator:
             table=query,
             properties=self.jdbc_properties
         )
-        
+
+        df = self._filter_invalid_tickers(df, ticker_col="ticker", name_col="company_name")
+
         LOG.info("Loaded stock data: %d records for %d-day period", df.count(), days)
         return df
+
+    def _filter_invalid_tickers(self, df: DataFrame, ticker_col: str, name_col: Optional[str] = None) -> DataFrame:
+        """Filter out placeholder/mock tickers and company names."""
+        filtered = df.filter(~F.col(ticker_col).rlike(EXCLUDE_TICKER_REGEX))
+        if name_col and name_col in df.columns and EXCLUDE_COMPANY_PREFIXES:
+            for prefix in EXCLUDE_COMPANY_PREFIXES:
+                filtered = filtered.filter(~F.upper(F.col(name_col)).startswith(prefix))
+        return filtered
     
     def calculate_returns(self, df: DataFrame, period_days: int) -> DataFrame:
         """
@@ -461,6 +479,15 @@ class ActiveStockAllocator:
         
         # Convert to pandas for easier upsert
         portfolio_pd = portfolio.toPandas()
+
+        as_of_date_val = portfolio_pd['as_of_date'].iloc[0]
+        period_days_val = int(portfolio_pd['period_days'].iloc[0])
+
+        delete_query = """
+            DELETE FROM analytics_05_portfolio_allocation
+            WHERE as_of_date = %s AND period_days = %s
+        """
+        self.db.execute_query(delete_query, (as_of_date_val, period_days_val))
         
         for _, row in portfolio_pd.iterrows():
             period_days = row['period_days']
@@ -636,7 +663,9 @@ class ActiveStockAllocator:
                 table=holdings_query,
                 properties=self.jdbc_properties
             )
-            
+
+            holdings_df = self._filter_invalid_tickers(holdings_df, ticker_col="holding_ticker")
+
             LOG.info("Loaded %d holdings records", holdings_df.count())
             
             # STEP 3: Load stock data (for metadata: sector, market cap)
@@ -711,7 +740,11 @@ def main():
     allocator = None
     try:
         allocator = ActiveStockAllocator()
-        allocator.run()
+        as_of_date_str = sys.argv[1] if len(sys.argv) > 1 else os.getenv("AS_OF_DATE")
+        as_of_date = None
+        if as_of_date_str:
+            as_of_date = datetime.strptime(as_of_date_str, "%Y-%m-%d").date()
+        allocator.run(as_of_date=as_of_date)
     except Exception as exc:
         LOG.error("Fatal error: %s", exc, exc_info=True)
         sys.exit(1)

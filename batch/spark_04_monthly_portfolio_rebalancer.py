@@ -20,8 +20,10 @@ from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from pyspark.sql.types import *
 from datetime import datetime, timedelta
+import argparse
 import calendar
 import logging
+import os
 
 # Logging 설정
 logging.basicConfig(
@@ -40,12 +42,14 @@ class MonthlyPortfolioRebalancer:
         self.db_password = db_password
         
         # Spark Session 생성
-        self.spark = SparkSession.builder \
+        jar_path = os.getenv("POSTGRES_JAR_PATH")
+        builder = SparkSession.builder \
             .appName("MonthlyPortfolioRebalancer") \
-            .config("spark.jars", "/opt/spark/jars/postgresql-42.7.4.jar") \
             .config("spark.sql.adaptive.enabled", "true") \
-            .config("spark.sql.adaptive.coalescePartitions.enabled", "true") \
-            .getOrCreate()
+            .config("spark.sql.adaptive.coalescePartitions.enabled", "true")
+        if jar_path and os.path.exists(jar_path):
+            builder = builder.config("spark.jars", jar_path)
+        self.spark = builder.getOrCreate()
         
         self.spark.sparkContext.setLogLevel("WARN")
         logger.info("Spark Session 초기화 완료")
@@ -59,6 +63,23 @@ class MonthlyPortfolioRebalancer:
         # 다음 일요일이 다음 달인지 확인
         next_sunday = check_date + timedelta(days=7)
         return next_sunday.month != check_date.month
+
+    def get_latest_as_of_date(self) -> str:
+        """analytics_05_portfolio_allocation에서 최신 as_of_date 조회"""
+        query = "(SELECT MAX(as_of_date) AS max_date FROM analytics_05_portfolio_allocation) AS latest_date"
+        df = self.spark.read \
+            .format("jdbc") \
+            .option("url", self.jdbc_url) \
+            .option("dbtable", query) \
+            .option("user", self.db_user) \
+            .option("password", self.db_password) \
+            .load()
+
+        row = df.first()
+        max_date = row["max_date"] if row else None
+        if not max_date:
+            raise ValueError("analytics_05_portfolio_allocation에 데이터가 없습니다.")
+        return max_date.strftime("%Y-%m-%d")
     
     def load_multi_period_portfolios(self, as_of_date: str):
         """
@@ -79,7 +100,7 @@ class MonthlyPortfolioRebalancer:
                     ticker,
                     company_name,
                     sector,
-                    return_20d,
+                    return_pct,
                     portfolio_weight,
                     market_cap,
                     allocation_reason,
@@ -124,7 +145,7 @@ class MonthlyPortfolioRebalancer:
         logger.info("포트폴리오 비교 및 점수 계산 시작")
         
         df_20 = portfolios[20].withColumnRenamed("portfolio_weight", "weight_20") \
-            .withColumnRenamed("return_20d", "return_20") \
+            .withColumnRenamed("return_pct", "return_20") \
             .withColumnRenamed("allocation_reason", "reason_20") \
             .select("ticker", "company_name", "sector", "market_cap", "weight_20", "return_20", "reason_20", "as_of_date")
         
@@ -162,13 +183,13 @@ class MonthlyPortfolioRebalancer:
         # Step 3: 10일만 존재 (20일 없음) - 별도 처리 필요
         df_10_only = df_10.join(df_20.select("ticker"), "ticker", "left_anti")
         df_10_only = df_10_only.join(
-            portfolios[10].select("ticker", "company_name", "sector", "market_cap", "return_20d", "allocation_reason", "as_of_date"),
+            portfolios[10].select("ticker", "company_name", "sector", "market_cap", "return_pct", "allocation_reason", "as_of_date"),
             "ticker"
         )
         df_10_only = df_10_only.withColumn("score", F.lit(0.5)) \
             .withColumn("weight_20", F.lit(None).cast("double")) \
             .withColumn("weight_5", F.lit(None).cast("double")) \
-            .withColumn("return_20", F.col("return_20d")) \
+            .withColumn("return_20", F.col("return_pct")) \
             .withColumn("reason_20", F.col("allocation_reason")) \
             .select("ticker", "company_name", "sector", "market_cap", "weight_20", "weight_10", "weight_5", "return_20", "reason_20", "as_of_date", "score")
         
@@ -178,25 +199,25 @@ class MonthlyPortfolioRebalancer:
         # 5일 ∩ 10일 체크
         df_5_and_10 = df_5_only.join(df_10.select("ticker", "weight_10"), "ticker", "inner")
         df_5_and_10 = df_5_and_10.join(
-            portfolios[5].select("ticker", "company_name", "sector", "market_cap", "return_20d", "allocation_reason", "as_of_date"),
+            portfolios[5].select("ticker", "company_name", "sector", "market_cap", "return_pct", "allocation_reason", "as_of_date"),
             "ticker"
         )
         df_5_and_10 = df_5_and_10.withColumn("score", F.lit(2.0)) \
             .withColumn("weight_20", F.lit(None).cast("double")) \
-            .withColumn("return_20", F.col("return_20d")) \
+            .withColumn("return_20", F.col("return_pct")) \
             .withColumn("reason_20", F.col("allocation_reason")) \
             .select("ticker", "company_name", "sector", "market_cap", "weight_20", "weight_10", "weight_5", "return_20", "reason_20", "as_of_date", "score")
         
         # 5일만 (10일, 20일 모두 없음)
         df_5_only_pure = df_5_only.join(df_10.select("ticker"), "ticker", "left_anti")
         df_5_only_pure = df_5_only_pure.join(
-            portfolios[5].select("ticker", "company_name", "sector", "market_cap", "return_20d", "allocation_reason", "as_of_date"),
+            portfolios[5].select("ticker", "company_name", "sector", "market_cap", "return_pct", "allocation_reason", "as_of_date"),
             "ticker"
         )
         df_5_only_pure = df_5_only_pure.withColumn("score", F.lit(0.3)) \
             .withColumn("weight_20", F.lit(None).cast("double")) \
             .withColumn("weight_10", F.lit(None).cast("double")) \
-            .withColumn("return_20", F.col("return_20d")) \
+            .withColumn("return_20", F.col("return_pct")) \
             .withColumn("reason_20", F.col("allocation_reason")) \
             .select("ticker", "company_name", "sector", "market_cap", "weight_20", "weight_10", "weight_5", "return_20", "reason_20", "as_of_date", "score")
         
@@ -314,13 +335,19 @@ class MonthlyPortfolioRebalancer:
         # 기존 데이터 삭제 (같은 rebalance_date)
         rebalance_date = output_df.select("rebalance_date").first()[0]
         
-        with self.spark._jvm.java.sql.DriverManager.getConnection(
+        conn = self.spark._jvm.java.sql.DriverManager.getConnection(
             self.jdbc_url, self.db_user, self.db_password
-        ) as conn:
+        )
+        stmt = None
+        try:
             stmt = conn.createStatement()
             delete_query = f"DELETE FROM analytics_08_monthly_portfolio WHERE rebalance_date = '{rebalance_date}'"
             deleted = stmt.executeUpdate(delete_query)
             logger.info(f"기존 데이터 삭제: {deleted}건")
+        finally:
+            if stmt is not None:
+                stmt.close()
+            conn.close()
         
         # 새 데이터 저장
         output_df.write \
@@ -337,7 +364,7 @@ class MonthlyPortfolioRebalancer:
         # 결과 출력
         output_df.orderBy("final_rank").show(20, truncate=False)
     
-    def run(self, as_of_date: str = None):
+    def run(self, as_of_date: str = None, force_run: bool = False):
         """
         메인 실행 함수
         
@@ -354,11 +381,11 @@ class MonthlyPortfolioRebalancer:
             logger.info(f"=== 월간 포트폴리오 리밸런싱 시작: {target_date.strftime('%Y-%m-%d')} ===")
             
             # 마지막 일요일 체크
-            if not self.is_last_sunday_of_month(target_date):
+            if not force_run and not self.is_last_sunday_of_month(target_date):
                 logger.warning(f"{target_date.strftime('%Y-%m-%d')}는 해당 월의 마지막 일요일이 아닙니다. 실행을 건너뜁니다.")
                 return
             
-            as_of_str = target_date.strftime("%Y-%m-%d")
+            as_of_str = as_of_date or self.get_latest_as_of_date()
             
             # 1. 포트폴리오 로드
             portfolios = self.load_multi_period_portfolios(as_of_str)
@@ -386,26 +413,27 @@ class MonthlyPortfolioRebalancer:
 
 
 if __name__ == "__main__":
-    import os
-    
     # 환경 변수
-    POSTGRES_HOST = os.getenv("POSTGRES_HOST", "postgres")
-    POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-    POSTGRES_DB = os.getenv("POSTGRES_DB", "finviz_stock_db")
-    POSTGRES_USER = os.getenv("POSTGRES_USER", "finvizuser")
-    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "finvizpass")
-    
-    jdbc_url = f"jdbc:postgresql://{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
-    
+    db_host = os.getenv("DB_HOST") or os.getenv("POSTGRES_HOST", "postgres")
+    db_port = os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT", "5432")
+    db_name = os.getenv("DB_NAME") or os.getenv("POSTGRES_DB", "stockdb")
+    db_user = os.getenv("DB_USER") or os.getenv("POSTGRES_USER", "postgres")
+    db_password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD", "postgres")
+
+    jdbc_url = f"jdbc:postgresql://{db_host}:{db_port}/{db_name}"
+
     # 실행
     rebalancer = MonthlyPortfolioRebalancer(
         jdbc_url=jdbc_url,
-        db_user=POSTGRES_USER,
-        db_password=POSTGRES_PASSWORD
+        db_user=db_user,
+        db_password=db_password
     )
-    
-    # 오늘 날짜 또는 명령행 인자로 날짜 지정
-    import sys
-    target_date = sys.argv[1] if len(sys.argv) > 1 else None
-    
-    rebalancer.run(as_of_date=target_date)
+
+    parser = argparse.ArgumentParser(description="Monthly portfolio rebalancer")
+    parser.add_argument("as_of_date", nargs="?", help="YYYY-MM-DD (default: latest in DB)")
+    parser.add_argument("--force", action="store_true", help="마지막 일요일 체크 무시")
+    args = parser.parse_args()
+
+    force_flag = args.force or os.getenv("FORCE_REBALANCE", "").lower() in {"1", "true", "yes"}
+
+    rebalancer.run(as_of_date=args.as_of_date, force_run=force_flag)

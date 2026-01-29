@@ -29,6 +29,7 @@ async def get_latest_stock(symbol: str):
     db = DatabaseHelper()
     
     query = """
+        SELECT
             ticker as symbol, sector, close_price as avg_price, volume as total_volume,
             low_price as min_price, high_price as max_price, 1 as record_count,
             trade_date as window_start, trade_date as window_end, created_at as processed_at
@@ -120,10 +121,10 @@ async def get_portfolio_allocation(
             company_name,
             sector,
             market_cap,
-            return_20d as return_pct,
+            return_pct,
             portfolio_weight as weight,
             allocation_reason,
-            rank_20d as rank,
+            rank,
             period_days,
             created_at
         FROM analytics_05_portfolio_allocation
@@ -232,4 +233,3 @@ async def get_monthly_portfolio(
         "total_weight": round(total_weight, 2),
         "data": results
     }
-

@@ -165,63 +165,57 @@ def update_period_description(period):
 )
 def update_main_content(period, n):
     """메인 컨텐츠 업데이트 (탭별 다른 레이아웃)"""
-    
-    if period == 'monthly':
-        # 월간 비교 레이아웃
-        return create_monthly_comparison_layout()
-    else:
-        # 기간별 분석 레이아웃 (5d, 10d, 20d)
-        period_days = int(period[:-1])  # '5d' -> 5
-        return create_period_analysis_layout(period_days)
 
-
-def create_period_analysis_layout(period_days):
-    """기간별 분석 레이아웃 생성 (5d, 10d, 20d)"""
-    
     return html.Div([
-        # Row 1: 섹터 성과 테이블
-        dbc.Row([
-            dbc.Col([
-                html.H3(f"📊 {period_days}일 섹터 성과 (10개 섹터)", 
-                       className="mb-3", 
-                       style={'color': '#34495e', 'fontWeight': 'bold'}),
-                html.Div(id=f'sector-performance-table-{period_days}d')
-            ], width=12)
-        ], className="mb-4"),
-        
-        # Row 2: 트렌딩 섹터 종목 (상위 2개 섹터에서 각각 Top 2)
-        dbc.Row([
-            dbc.Col([
-                html.H3(f"🔥 트렌딩 섹터 종목 ({period_days}일 기준, 상위 2개 섹터)", 
-                       className="mb-3", 
-                       style={'color': '#34495e', 'fontWeight': 'bold'}),
-                html.Div(id=f'trending-sector-stocks-{period_days}d')
-            ], width=12)
-        ], className="mb-4"),
-        
-        # Row 3: Active ETF Top 10 (월간 포트폴리오 - 20개 중 상위 10개)
-        dbc.Row([
-            dbc.Col([
-                html.H3(f"💎 Active ETF Top 10 (월간 리스트 중 상위, 동일 비중)", 
-                       className="mb-3", 
-                       style={'color': '#34495e', 'fontWeight': 'bold'}),
-                html.Div(id=f'active-etf-top10-{period_days}d')
-            ], width=12)
-        ], className="mb-4"),
-        
-        # Row 4: 벤치마크 vs Active Holdings 차트
-        dbc.Row([
-            dbc.Col([
-                html.H3(f"📈 벤치마크 vs Active Holdings ({period_days}일 성과)", 
-                       className="mb-3", 
-                       style={'color': '#34495e', 'fontWeight': 'bold'}),
-                dcc.Graph(id=f'benchmark-comparison-{period_days}d')
-            ], width=12)
-        ], className="mb-4"),
+        create_period_analysis_layout(period),
+        create_monthly_comparison_layout(period == 'monthly')
     ])
 
 
-def create_monthly_comparison_layout():
+def create_period_analysis_layout(selected_period):
+    """기간별 분석 레이아웃 생성 (5d, 10d, 20d)"""
+    sections = []
+
+    for period_days in [5, 10, 20]:
+        period_key = f"{period_days}d"
+        display_style = {'display': 'block'} if selected_period == period_key else {'display': 'none'}
+
+        sections.append(html.Div([
+            # Row 1: 섹터 성과 테이블
+            dbc.Row([
+                dbc.Col([
+                    html.H3(f"📊 {period_days}일 섹터 성과 (10개 섹터)", 
+                           className="mb-3", 
+                           style={'color': '#34495e', 'fontWeight': 'bold'}),
+                    html.Div(id=f'sector-performance-table-{period_days}d')
+                ], width=12)
+            ], className="mb-4"),
+            
+            # Row 2: 트렌딩 섹터 종목 (상위 2개 섹터에서 각각 Top 2)
+            dbc.Row([
+                dbc.Col([
+                    html.H3(f"🔥 트렌딩 섹터 종목 ({period_days}일 기준, 상위 2개 섹터)", 
+                           className="mb-3", 
+                           style={'color': '#34495e', 'fontWeight': 'bold'}),
+                    html.Div(id=f'trending-sector-stocks-{period_days}d')
+                ], width=12)
+            ], className="mb-4"),
+            
+            # Row 3: 트렌딩 ETF 상위 5개 종목
+            dbc.Row([
+                dbc.Col([
+                    html.H3(f"💎 ETF별 그룹 카드: 상위 5개 종목 ({period_days}일 기준)", 
+                           className="mb-3", 
+                           style={'color': '#34495e', 'fontWeight': 'bold'}),
+                    html.Div(id=f'trending-etf-top-holdings-{period_days}d')
+                ], width=12)
+            ], className="mb-4"),
+        ], style=display_style))
+
+    return html.Div(sections)
+
+
+def create_monthly_comparison_layout(is_visible: bool):
     """월간 비교 레이아웃 생성 (기존 월 vs 현재 월)"""
     
     return html.Div([
@@ -254,7 +248,17 @@ def create_monthly_comparison_layout():
                 html.Div(id='current-month-portfolio-performance')
             ], width=12)
         ], className="mb-4"),
-    ])
+
+        # Row 4: 현재 월 포트폴리오 vs SPY 비교 그래프
+        dbc.Row([
+            dbc.Col([
+                html.H3("📈 현재 월 포트폴리오(Active Holdings) vs SPY (20일 성과)", 
+                       className="mb-3", 
+                       style={'color': '#34495e', 'fontWeight': 'bold'}),
+                dcc.Graph(id='monthly-benchmark-comparison')
+            ], width=12)
+        ], className="mb-4"),
+    ], style={'display': 'block' if is_visible else 'none'})
 
 
 # ===============================================
@@ -403,15 +407,11 @@ def update_trending_sector_stocks(n):
             sector_return = sector_info['return']
             
             # 해당 섹터의 종목 가져오기
-            stocks_data = api_request('/dashboard/top-performers', 
-                                     {'limit': 50, 'window_days': period_days})
+            stocks_data = api_request('/dashboard/top-performers-by-sector', 
+                                     {'sector': sector, 'limit': 2, 'window_days': period_days})
             
             if stocks_data:
-                # 섹터 필터링
-                sector_stocks = [s for s in stocks_data if s.get('sector') == sector]
-                top_2 = sector_stocks[:2]
-                
-                for stock in top_2:
+                for stock in stocks_data:
                     all_stocks.append({
                         'sector': sector,
                         'sector_return': sector_return,
@@ -467,190 +467,239 @@ def update_trending_sector_stocks(n):
             
             results.append(html.Div(cards))
         else:
-            results.append(html.P("⏳ 데이터 로딩 중...", 
+            results.append(html.P("⏳ 해당 섹터 데이터 없음", 
                                  className="text-warning text-center"))
     
     return results
 
 
 # ===============================================
-# Callback: Active ETF Top 10 (기간별)
+# Callback: 트렌딩 ETF 상위 5개 종목 (기간별)
 # ===============================================
 @callback(
-    [Output('active-etf-top10-5d', 'children'),
-     Output('active-etf-top10-10d', 'children'),
-     Output('active-etf-top10-20d', 'children')],
+    [Output('trending-etf-top-holdings-5d', 'children'),
+     Output('trending-etf-top-holdings-10d', 'children'),
+     Output('trending-etf-top-holdings-20d', 'children')],
     Input('interval-component', 'n_intervals')
 )
-def update_active_etf_top10(n):
-    """Active ETF Top 10 표시 (월간 포트폴리오 중 상위 10개, 동일 비중)"""
-    
+def update_trending_etf_top_holdings(n):
+    """트렌딩 ETF 상위 5개 종목 표시 (기간별) - ETF별 그룹 카드"""
     results = []
-    
-    for period_days in [5, 10, 20]:
-        # 월간 포트폴리오 데이터 가져오기
-        monthly_data = api_request('/stocks/monthly-portfolio')
-        
-        if monthly_data and monthly_data.get('data'):
-            top_10 = monthly_data['data'][:10]
-            
-            # 테이블 생성 (동일 비중 10%)
-            table_rows = []
-            equal_weight = 10.0  # 동일 비중 10%
-            
-            for i, stock in enumerate(top_10, 1):
-                ticker = stock.get('ticker', '')
-                company_name = stock.get('company_name', '')
-                return_pct = stock.get('return_pct', 0)
-                
-                table_rows.append(html.Tr([
-                    html.Td(str(i), style={'padding': '12px', 'textAlign': 'center', 
-                                          'fontWeight': 'bold', 'fontSize': '15px'}),
-                    html.Td(ticker, style={'padding': '12px', 'fontWeight': 'bold', 
-                                          'fontSize': '15px', 'color': '#3498db'}),
-                    html.Td(company_name[:35], style={'padding': '12px', 'fontSize': '13px'}),
-                    html.Td(f"{equal_weight:.1f}%", style={
-                        'padding': '12px', 'textAlign': 'right',
-                        'fontWeight': 'bold', 'fontSize': '16px',
-                        'color': '#27ae60'
-                    }),
-                    html.Td(f"{return_pct:+.2f}%", style={
-                        'padding': '12px', 'textAlign': 'right',
-                        'fontWeight': 'bold', 'fontSize': '15px',
-                        'color': '#27ae60' if return_pct >= 0 else '#e74c3c'
-                    })
-                ]))
-            
-            table = dbc.Table([
-                html.Thead(html.Tr([
-                    html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                         'textAlign': 'center', 'padding': '12px'}),
-                    html.Th("종목", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                         'padding': '12px'}),
-                    html.Th("회사명", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                          'padding': '12px'}),
-                    html.Th("비중", style={'backgroundColor': '#9b59b6', 'color': 'white', 
-                                        'padding': '12px'}),
-                    html.Th(f"{period_days}일 수익률", style={'backgroundColor': '#9b59b6', 
-                                                          'color': 'white', 'padding': '12px'}),
-                ])),
-                html.Tbody(table_rows)
-            ], bordered=True, hover=True, className="mb-2")
-            
-            footer = html.P(f"💡 총 10개 종목 | 동일 비중 (각 10%) | 최종 리스트는 20개 종목", 
-                           className="text-muted text-center mt-2",
-                           style={'fontSize': '13px', 'fontStyle': 'italic'})
-            
-            results.append(html.Div([table, footer]))
-        else:
-            results.append(html.P("⏳ 월간 포트폴리오 데이터 로딩 중...", 
-                                 className="text-warning text-center"))
-    
-    return results
 
-
-# ===============================================
-# Callback: 벤치마크 비교 차트 (기간별)
-# ===============================================
-@callback(
-    [Output('benchmark-comparison-5d', 'children'),
-     Output('benchmark-comparison-10d', 'children'),
-     Output('benchmark-comparison-20d', 'children')],
-    Input('interval-component', 'n_intervals')
-)
-def update_benchmark_comparison(n):
-    """벤치마크 vs Active Holdings 차트 (기간별)"""
-    
-    results = []
-    
     for period_days in [5, 10, 20]:
-        # SPY 벤치마크 데이터
-        spy_data = api_request('/dashboard/spy-benchmark', {'days': period_days})
-        
-        # Active Holdings 데이터 (Top 10)
-        monthly_data = api_request('/stocks/monthly-portfolio')
-        
-        fig = go.Figure()
-        
-        # SPY 추가
-        if spy_data:
-            spy_df = pd.DataFrame(spy_data)
-            spy_df['trade_date'] = pd.to_datetime(spy_df['trade_date'])
-            spy_df = spy_df.sort_values('trade_date')
-            spy_df['close_price'] = pd.to_numeric(spy_df['close_price'])
-            
-            if not spy_df.empty:
-                base_price = spy_df['close_price'].iloc[0]
-                spy_df['cum_return'] = (spy_df['close_price'] / base_price - 1) * 100
-                
-                fig.add_trace(go.Scatter(
-                    x=spy_df['trade_date'],
-                    y=spy_df['cum_return'],
-                    mode='lines',
-                    name='SPY (Benchmark)',
-                    line=dict(color='#3498db', width=3)
-                ))
-        
-        # Active Portfolio 추가
-        if monthly_data and monthly_data.get('data'):
-            top_10_tickers = [s['ticker'] for s in monthly_data['data'][:10]]
-            
-            # 각 종목의 데이터 가져오기
-            all_holdings = []
-            for ticker in top_10_tickers:
-                holdings = api_request('/dashboard/etf-holdings', 
-                                      {'ticker': ticker, 'days': period_days})
-                if holdings:
-                    all_holdings.extend(holdings)
-            
-            if all_holdings:
-                holdings_df = pd.DataFrame(all_holdings)
-                holdings_df['trade_date'] = pd.to_datetime(holdings_df['trade_date'])
-                holdings_df['close_price'] = pd.to_numeric(holdings_df['close_price'], errors='coerce')
-                holdings_df = holdings_df.dropna(subset=['close_price'])
-                
-                if not holdings_df.empty:
-                    # 피벗: 날짜별 종목 가격
-                    pivot = holdings_df.pivot_table(
-                        index='trade_date',
-                        columns='ticker',
-                        values='close_price',
-                        aggfunc='last'
+        data = api_request('/dashboard/trending-etf-top-holdings',
+                           {'period_days': period_days, 'limit': 5})
+
+        if data and data.get('etfs'):
+            portfolio_pick = data.get('portfolio_pick')
+
+            def render_card(etf):
+                holdings = etf.get('holdings', [])
+                badge_color = '#f39c12' if etf.get('is_benchmark') else '#2ecc71'
+                badge_text = "Benchmark" if etf.get('is_benchmark') else "Trending"
+                etf_return = float(etf.get('etf_return_pct') or 0)
+
+                table_rows = []
+                for idx, item in enumerate(holdings, 1):
+                    market_cap = item.get('market_cap') or 0
+                    market_cap_b = market_cap / 1e9 if market_cap else 0
+                    holding_return = item.get('holding_return_pct')
+                    holding_return_val = float(holding_return) if holding_return is not None else None
+                    is_portfolio = (
+                        portfolio_pick
+                        and item.get('holding_ticker') == portfolio_pick.get('holding_ticker')
+                        and etf.get('etf_ticker') == portfolio_pick.get('source_etf')
                     )
-                    
-                    if not pivot.empty:
-                        # 수익률 계산
-                        base_prices = pivot.iloc[0]
-                        cumulative_returns = (pivot / base_prices - 1)
-                        portfolio_returns = cumulative_returns.mean(axis=1, skipna=True)
-                        
-                        fig.add_trace(go.Scatter(
-                            x=portfolio_returns.index,
-                            y=portfolio_returns.values * 100,
-                            mode='lines',
-                            name='Active Portfolio (Top 10)',
-                            line=dict(color='#27ae60', width=3)
-                        ))
-        
-        fig.update_layout(
-            xaxis_title="날짜",
-            yaxis_title="누적 수익률 (%)",
-            height=400,
-            hovermode='x unified',
-            plot_bgcolor='#f8f9fa',
-            margin=dict(l=50, r=50, t=30, b=50),
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-        
-        results.append(dcc.Graph(figure=fig))
-    
+
+                    table_rows.append(html.Tr([
+                        html.Td(str(idx), style={'padding': '10px', 'textAlign': 'center',
+                                                'fontWeight': 'bold', 'fontSize': '14px'}),
+                        html.Td(
+                            html.Div([
+                                html.Span(item.get('holding_ticker', ''), style={'fontWeight': 'bold'}),
+                                html.Span(" ★포트폴리오" if is_portfolio else "", style={
+                                    'marginLeft': '6px',
+                                    'color': '#e67e22',
+                                    'fontWeight': 'bold',
+                                    'fontSize': '12px'
+                                }) if is_portfolio else ""
+                            ]),
+                            style={'padding': '10px'}
+                        ),
+                        html.Td(item.get('holding_name', '')[:30], style={'padding': '10px', 'fontSize': '12px'}),
+                        html.Td(f"${market_cap_b:.2f}B" if market_cap_b else "—", style={
+                            'padding': '10px', 'textAlign': 'right',
+                            'fontWeight': 'bold', 'color': '#27ae60'
+                        }),
+                        html.Td(
+                            f"{holding_return_val:+.2f}%" if holding_return_val is not None else "—",
+                            style={
+                                'padding': '10px', 'textAlign': 'right',
+                                'fontWeight': 'bold',
+                                'color': '#27ae60' if (holding_return_val or 0) >= 0 else '#e74c3c'
+                            }
+                        ),
+                    ]))
+
+                table = dbc.Table([
+                    html.Thead(html.Tr([
+                        html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                             'textAlign': 'center', 'padding': '10px'}),
+                        html.Th("종목", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                             'padding': '10px'}),
+                        html.Th("회사명", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                              'padding': '10px'}),
+                        html.Th("시가총액", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                               'padding': '10px'}),
+                        html.Th("해당 종목 기간 수익률", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                                     'padding': '10px'}),
+                    ])),
+                    html.Tbody(table_rows)
+                ], bordered=True, hover=True, className="mb-2")
+
+                header = html.Div([
+                    html.H5(f"ETF: {etf.get('etf_ticker')}", className="mb-1"),
+                    html.Span(badge_text, style={
+                        'backgroundColor': badge_color,
+                        'color': 'white',
+                        'padding': '2px 8px',
+                        'borderRadius': '10px',
+                        'fontSize': '11px',
+                        'fontWeight': 'bold',
+                        'marginRight': '8px'
+                    }),
+                    html.Span(f"ETF 기간 수익률: {etf_return:+.2f}%", style={
+                        'fontSize': '12px',
+                        'color': '#7f8c8d'
+                    })
+                ])
+
+                return dbc.Col([
+                    dbc.Card([
+                        dbc.CardHeader(header),
+                        dbc.CardBody(table)
+                    ], className="mb-3")
+                ], width=6)
+
+            cards = [render_card(etf) for etf in data.get('etfs', [])]
+
+            portfolio_summary = None
+            if portfolio_pick:
+                pick_return = float(portfolio_pick.get("holding_return_pct") or 0)
+                portfolio_summary = dbc.Alert(
+                    f"🎯 포트폴리오 선정: {portfolio_pick.get('holding_ticker')} "
+                    f"({portfolio_pick.get('holding_name', '')[:30]}) "
+                    f"| 기간 수익률: {pick_return:+.2f}% "
+                    f"| 기준 ETF: {portfolio_pick.get('source_etf')}",
+                    color="info",
+                    className="text-center mb-3"
+                )
+
+            results.append(html.Div([
+                portfolio_summary,
+                dbc.Row(cards)
+            ]))
+        else:
+            results.append(html.P("⏳ 데이터 로딩 중...", className="text-warning text-center"))
+
     return results
+
+
+# ===============================================
+# Callback: 월간 포트폴리오 vs SPY 비교 그래프
+# ===============================================
+@callback(
+    Output('monthly-benchmark-comparison', 'figure'),
+    Input('interval-component', 'n_intervals')
+)
+def update_monthly_benchmark_comparison(n):
+    """현재 월 포트폴리오(Active Holdings) vs SPY 비교"""
+    fig = go.Figure()
+
+    spy_data = api_request('/dashboard/spy-benchmark', {'days': 20})
+    monthly_data = api_request('/stocks/monthly-portfolio')
+
+    # SPY 추가
+    if spy_data:
+        spy_df = pd.DataFrame(spy_data)
+        spy_df['trade_date'] = pd.to_datetime(spy_df['trade_date'])
+        spy_df = spy_df.sort_values('trade_date')
+        spy_df['close_price'] = pd.to_numeric(spy_df['close_price'])
+
+        if not spy_df.empty:
+            base_price = spy_df['close_price'].iloc[0]
+            spy_df['cum_return'] = (spy_df['close_price'] / base_price - 1) * 100
+
+            fig.add_trace(go.Scatter(
+                x=spy_df['trade_date'],
+                y=spy_df['cum_return'],
+                mode='lines',
+                name='SPY (Benchmark)',
+                line=dict(color='#3498db', width=3)
+            ))
+
+    # Active Portfolio (월간) 추가
+    if monthly_data and monthly_data.get('data'):
+        portfolio = monthly_data['data'][:20]
+        weights = {p['ticker']: float(p.get('weight', 0)) for p in portfolio if p.get('ticker')}
+        total_weight = sum(weights.values()) if weights else 0
+
+        all_holdings = []
+        for ticker in weights.keys():
+            holdings = api_request('/dashboard/etf-holdings', {'ticker': ticker, 'days': 20})
+            if holdings:
+                all_holdings.extend(holdings)
+
+        if all_holdings:
+            holdings_df = pd.DataFrame(all_holdings)
+            holdings_df['trade_date'] = pd.to_datetime(holdings_df['trade_date'])
+            holdings_df['close_price'] = pd.to_numeric(holdings_df['close_price'], errors='coerce')
+            holdings_df = holdings_df.dropna(subset=['close_price'])
+
+            if not holdings_df.empty:
+                pivot = holdings_df.pivot_table(
+                    index='trade_date',
+                    columns='ticker',
+                    values='close_price',
+                    aggfunc='last'
+                ).sort_index()
+
+                if not pivot.empty:
+                    base_prices = pivot.iloc[0]
+                    cumulative_returns = (pivot / base_prices - 1)
+
+                    if total_weight > 0:
+                        weight_series = pd.Series(weights).reindex(cumulative_returns.columns).fillna(0)
+                        weight_series = weight_series / weight_series.sum()
+                        portfolio_returns = (cumulative_returns * weight_series).sum(axis=1, skipna=True)
+                    else:
+                        portfolio_returns = cumulative_returns.mean(axis=1, skipna=True)
+
+                    fig.add_trace(go.Scatter(
+                        x=portfolio_returns.index,
+                        y=portfolio_returns.values * 100,
+                        mode='lines',
+                        name='Active Portfolio (Monthly)',
+                        line=dict(color='#27ae60', width=3)
+                    ))
+
+    fig.update_layout(
+        xaxis_title="날짜",
+        yaxis_title="누적 수익률 (%)",
+        height=400,
+        hovermode='x unified',
+        plot_bgcolor='#f8f9fa',
+        margin=dict(l=50, r=50, t=30, b=50),
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+
+    return fig
 
 
 # ===============================================
@@ -767,30 +816,6 @@ def update_monthly_comparison(n):
             'current_return': current_return,
             'change': change
         })
-        
-        if prev_data and len(prev_data) >= 30:  # 최소 30일 이상 필요
-            df = pd.DataFrame(prev_data)
-            df = df.sort_values('trade_date')
-            df['close_price'] = pd.to_numeric(df['close_price'])
-            
-            # 20~40일 구간 (이전 월)
-            prev_df = df.iloc[20:40] if len(df) >= 40 else df.iloc[:20]
-            
-            if len(prev_df) >= 2:
-                start_price = prev_df['close_price'].iloc[0]
-                end_price = prev_df['close_price'].iloc[-1]
-                prev_return = ((end_price - start_price) / start_price) * 100
-        
-        # 변화량 계산
-        change = current_return - prev_return
-        
-        comparison_data.append({
-            'sector': sector,
-            'etf': etf_ticker,
-            'prev_return': prev_return,
-            'current_return': current_return,
-            'change': change
-        })
     
     # 변화량 순으로 정렬
     comparison_data = sorted(comparison_data, key=lambda x: x['change'], reverse=True)
@@ -854,8 +879,10 @@ def update_monthly_comparison(n):
         html.Thead(html.Tr([
             html.Th("순위", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                  'textAlign': 'center', 'padding': '12px'}),
-            html.Th("섹터", style={'backgroundColor': '#9b59b6', 'color': 'white',
+            html.Th("섹터/벤치마크", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                  'padding': '12px'}),
+            html.Th("이름", style={'backgroundColor': '#9b59b6', 'color': 'white',
+                                'textAlign': 'center', 'padding': '12px'}),
             html.Th("ETF", style={'backgroundColor': '#9b59b6', 'color': 'white',
                                 'textAlign': 'center', 'padding': '12px'}),
             html.Th("이전 월 (20일)", style={'backgroundColor': '#9b59b6',
@@ -1080,8 +1107,7 @@ def update_current_month_portfolio_performance(n):
         html.Tbody(table_rows)
     ], bordered=True, hover=True, className="mb-2")
     
-    footer = html.P(f"💡 총 20개 종목 | 총 비중: {total_weight:.2f}% | "
-                   f"상위 10개 종목은 Active ETF Top 10으로 동일 비중 (각 10%)", 
+    footer = html.P(f"💡 총 20개 종목 | 총 비중: {total_weight:.2f}%", 
                    className="text-muted text-center mt-2",
                    style={'fontSize': '13px', 'fontStyle': 'italic'})
     
